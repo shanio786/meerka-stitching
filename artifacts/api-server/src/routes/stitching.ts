@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, type SQL } from "drizzle-orm";
 import { db, stitchingJobsTable, stitchingAssignmentsTable, mastersTable, articlesTable, masterAccountsTable, masterTransactionsTable } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -8,7 +8,7 @@ router.get("/stitching/jobs", async (req, res): Promise<void> => {
   const { articleId, status } = req.query;
   const conditions = [];
   if (articleId) conditions.push(eq(stitchingJobsTable.articleId, Number(articleId)));
-  if (status && status !== "all") conditions.push(eq(stitchingJobsTable.status, status as any));
+  if (status && status !== "all") conditions.push(sql`${stitchingJobsTable.status} = ${String(status)}`);
 
   const jobs = await db
     .select({
@@ -93,7 +93,7 @@ router.get("/stitching/jobs/:id", async (req, res): Promise<void> => {
 router.patch("/stitching/jobs/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id, 10);
   const { status, notes } = req.body;
-  const updateData: any = {};
+  const updateData: Record<string, unknown> = {};
   if (status !== undefined) updateData.status = status;
   if (notes !== undefined) updateData.notes = notes;
   const [job] = await db.update(stitchingJobsTable).set(updateData).where(eq(stitchingJobsTable.id, id)).returning();

@@ -9,7 +9,7 @@ router.get("/overlock-button", async (req, res): Promise<void> => {
   const conditions = [];
   if (articleId) conditions.push(eq(overlockButtonEntriesTable.articleId, Number(articleId)));
   if (taskType && taskType !== "all") conditions.push(eq(overlockButtonEntriesTable.taskType, taskType as string));
-  if (status && status !== "all") conditions.push(eq(overlockButtonEntriesTable.status, status as any));
+  if (status && status !== "all") conditions.push(sql`${overlockButtonEntriesTable.status} = ${String(status)}`);
 
   const entries = await db
     .select({

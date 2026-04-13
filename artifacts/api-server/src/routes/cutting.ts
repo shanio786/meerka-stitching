@@ -8,7 +8,7 @@ router.get("/cutting/jobs", async (req, res): Promise<void> => {
   const { articleId, status } = req.query;
   const conditions = [];
   if (articleId) conditions.push(eq(cuttingJobsTable.articleId, Number(articleId)));
-  if (status && status !== "all") conditions.push(eq(cuttingJobsTable.status, status as any));
+  if (status && status !== "all") conditions.push(sql`${cuttingJobsTable.status} = ${String(status)}`);
 
   const jobs = await db
     .select({
@@ -99,7 +99,7 @@ router.get("/cutting/jobs/:id", async (req, res): Promise<void> => {
 router.patch("/cutting/jobs/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id, 10);
   const { status, notes } = req.body;
-  const updateData: any = {};
+  const updateData: Record<string, unknown> = {};
   if (status !== undefined) updateData.status = status;
   if (notes !== undefined) updateData.notes = notes;
 

@@ -7,7 +7,7 @@ const router: IRouter = Router();
 router.get("/masters", async (req, res): Promise<void> => {
   const { type, search, active } = req.query;
   const conditions = [];
-  if (type && type !== "all") conditions.push(eq(mastersTable.masterType, type as any));
+  if (type && type !== "all") conditions.push(sql`${mastersTable.masterType} = ${String(type)}`);
   if (search) conditions.push(ilike(mastersTable.name, `%${search}%`));
   if (active === "true") conditions.push(eq(mastersTable.isActive, true));
   if (active === "false") conditions.push(eq(mastersTable.isActive, false));

@@ -8,7 +8,7 @@ router.get("/finishing", async (req, res): Promise<void> => {
   const { articleId, status } = req.query;
   const conditions = [];
   if (articleId) conditions.push(eq(finishingEntriesTable.articleId, Number(articleId)));
-  if (status && status !== "all") conditions.push(eq(finishingEntriesTable.status, status as any));
+  if (status && status !== "all") conditions.push(sql`${finishingEntriesTable.status} = ${String(status)}`);
 
   const entries = await db
     .select({
