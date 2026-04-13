@@ -9,10 +9,6 @@ import Dashboard from "@/pages/dashboard";
 import ArticlesList from "@/pages/articles/index";
 import ArticleForm from "@/pages/articles/form";
 import ArticleDetail from "@/pages/articles/detail";
-import GrnList from "@/pages/grn/index";
-import GrnForm from "@/pages/grn/form";
-import Inventory from "@/pages/inventory";
-import Templates from "@/pages/templates";
 import Reports from "@/pages/reports";
 import MastersList from "@/pages/masters/index";
 import CuttingJobs from "@/pages/cutting/index";
@@ -38,11 +34,6 @@ function Router() {
         <Route path="/articles/new" component={ArticleForm} />
         <Route path="/articles/:id" component={ArticleDetail} />
         
-        <Route path="/grn" component={GrnList} />
-        <Route path="/grn/new" component={GrnForm} />
-        
-        <Route path="/inventory" component={Inventory} />
-        <Route path="/templates" component={Templates} />
         <Route path="/reports" component={Reports} />
 
         <Route path="/masters" component={MastersList} />

@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
-import { useListArticles, getListArticlesQueryKey, useToggleArticleActive, useDeleteArticle } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { apiGet, apiDelete, apiPatch } from "@/lib/api";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,49 +12,57 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Search, Eye, Trash2, Power } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+interface Article {
+  id: number;
+  articleCode: string;
+  articleName: string;
+  collectionName: string | null;
+  partType: string;
+  category: string;
+  piecesType: string;
+  isActive: boolean;
+  componentCount: number;
+  totalMetersReceived: number;
+  accessoryCount: number;
+}
+
 export default function ArticlesList() {
   const [search, setSearch] = useState("");
-  const [fabricType, setFabricType] = useState("");
   const [category, setCategory] = useState("");
-  const queryClient = useQueryClient();
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  const params = {
-    ...(search ? { search } : {}),
-    ...(fabricType && fabricType !== "all" ? { fabricType } : {}),
-    ...(category && category !== "all" ? { category } : {}),
+  const loadArticles = () => {
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (category && category !== "all") params.set("category", category);
+    const qs = params.toString();
+    apiGet<Article[]>(`/articles${qs ? `?${qs}` : ""}`)
+      .then(setArticles)
+      .catch(() => {})
+      .finally(() => setLoading(false));
   };
 
-  const { data: articles, isLoading } = useListArticles(params, {
-    query: { queryKey: getListArticlesQueryKey(params) }
-  });
+  useEffect(() => { loadArticles(); }, [search, category]);
 
-  const toggleActive = useToggleArticleActive();
-  const deleteArticle = useDeleteArticle();
-
-  const handleToggle = (id: number) => {
-    toggleActive.mutate({ id }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListArticlesQueryKey(params) });
-      }
-    });
+  const handleToggle = async (id: number) => {
+    await apiPatch(`/articles/${id}/toggle-active`, {});
+    loadArticles();
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (!confirm("Are you sure you want to delete this article?")) return;
-    deleteArticle.mutate({ id }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListArticlesQueryKey(params) });
-        toast({ title: "Article deleted" });
-      }
-    });
+    await apiDelete(`/articles/${id}`);
+    toast({ title: "Article deleted" });
+    loadArticles();
   };
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Articles"
-        description="Manage fabric article definitions and components"
+        title="Fabric Store - Articles"
+        description="Manage articles with fabric components and accessories"
         newAction={{ label: "New Article", href: "/articles/new" }}
       />
 
@@ -69,40 +76,25 @@ export default function ArticlesList() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-10"
-                data-testid="input-search-articles"
               />
             </div>
-            <Select value={fabricType} onValueChange={setFabricType}>
-              <SelectTrigger className="w-[160px]" data-testid="select-fabric-type">
-                <SelectValue placeholder="Fabric Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="Lawn">Lawn</SelectItem>
-                <SelectItem value="Cotton">Cotton</SelectItem>
-                <SelectItem value="Khaddar">Khaddar</SelectItem>
-                <SelectItem value="Chiffon">Chiffon</SelectItem>
-                <SelectItem value="Denim">Denim</SelectItem>
-                <SelectItem value="Silk">Silk</SelectItem>
-              </SelectContent>
-            </Select>
             <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="w-[140px]" data-testid="select-category">
+              <SelectTrigger className="w-[160px]">
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="3PC">3PC</SelectItem>
-                <SelectItem value="2PC">2PC</SelectItem>
-                <SelectItem value="Kurti">Kurti</SelectItem>
-                <SelectItem value="Suit">Suit</SelectItem>
+                <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="Summer">Summer</SelectItem>
+                <SelectItem value="Winter">Winter</SelectItem>
+                <SelectItem value="Spring">Spring</SelectItem>
+                <SelectItem value="Fall">Fall</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {isLoading ? (
+          {loading ? (
             <div className="space-y-3">
-              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-14 w-full" />)}
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full" />)}
             </div>
           ) : !articles?.length ? (
             <div className="text-center py-12 text-muted-foreground">
@@ -116,21 +108,22 @@ export default function ArticlesList() {
                   <TableRow>
                     <TableHead>Code</TableHead>
                     <TableHead>Name</TableHead>
-                    <TableHead>Fabric</TableHead>
+                    <TableHead>Part Type</TableHead>
                     <TableHead>Category</TableHead>
-                    <TableHead>Season</TableHead>
-                    <TableHead className="text-right">Fabric/Unit</TableHead>
+                    <TableHead>Pieces</TableHead>
+                    <TableHead className="text-right">Components</TableHead>
+                    <TableHead className="text-right">Total Meters</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {articles.map((article) => (
-                    <TableRow key={article.id} data-testid={`row-article-${article.id}`}>
+                    <TableRow key={article.id}>
                       <TableCell className="font-mono text-sm font-medium">{article.articleCode}</TableCell>
                       <TableCell>
                         <Link href={`/articles/${article.id}`}>
-                          <span className="font-medium hover:underline cursor-pointer text-primary" data-testid={`link-article-${article.id}`}>
+                          <span className="font-medium hover:underline cursor-pointer text-primary">
                             {article.articleName}
                           </span>
                         </Link>
@@ -138,38 +131,27 @@ export default function ArticlesList() {
                           <span className="block text-xs text-muted-foreground">{article.collectionName}</span>
                         )}
                       </TableCell>
-                      <TableCell><Badge variant="secondary">{article.fabricType}</Badge></TableCell>
+                      <TableCell><Badge variant="outline">{article.partType}</Badge></TableCell>
                       <TableCell>{article.category}</TableCell>
-                      <TableCell>{article.season}</TableCell>
+                      <TableCell><Badge variant="secondary">{article.piecesType}</Badge></TableCell>
+                      <TableCell className="text-right">{article.componentCount}</TableCell>
                       <TableCell className="text-right font-mono">
-                        {article.totalFabricPerUnit ? `${article.totalFabricPerUnit}m` : "-"}
+                        {article.totalMetersReceived > 0 ? `${article.totalMetersReceived}m` : "-"}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={article.isActive ? "default" : "secondary"} data-testid={`badge-status-${article.id}`}>
+                        <Badge variant={article.isActive ? "default" : "secondary"}>
                           {article.isActive ? "Active" : "Inactive"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
                           <Link href={`/articles/${article.id}`}>
-                            <Button variant="ghost" size="icon" data-testid={`button-view-${article.id}`}>
-                              <Eye className="h-4 w-4" />
-                            </Button>
+                            <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
                           </Link>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleToggle(article.id)}
-                            data-testid={`button-toggle-${article.id}`}
-                          >
+                          <Button variant="ghost" size="icon" onClick={() => handleToggle(article.id)}>
                             <Power className={`h-4 w-4 ${article.isActive ? "text-green-600" : "text-muted-foreground"}`} />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(article.id)}
-                            data-testid={`button-delete-${article.id}`}
-                          >
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(article.id)}>
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </div>

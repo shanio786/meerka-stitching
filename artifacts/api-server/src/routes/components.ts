@@ -1,131 +1,54 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db, articleComponentsTable } from "@workspace/db";
-import {
-  ListArticleComponentsParams,
-  ListArticleComponentsResponse,
-  CreateArticleComponentParams,
-  CreateArticleComponentBody,
-  BulkUpdateComponentsParams,
-  BulkUpdateComponentsBody,
-  BulkUpdateComponentsResponse,
-  UpdateComponentParams,
-  UpdateComponentBody,
-  UpdateComponentResponse,
-  DeleteComponentParams,
-} from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
 router.get("/articles/:articleId/components", async (req, res): Promise<void> => {
-  const params = ListArticleComponentsParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-
-  const components = await db
-    .select()
-    .from(articleComponentsTable)
-    .where(eq(articleComponentsTable.articleId, params.data.articleId));
-
-  res.json(ListArticleComponentsResponse.parse(components));
+  const articleId = parseInt(req.params.articleId, 10);
+  const components = await db.select().from(articleComponentsTable).where(eq(articleComponentsTable.articleId, articleId));
+  res.json(components);
 });
 
 router.post("/articles/:articleId/components", async (req, res): Promise<void> => {
-  const params = CreateArticleComponentParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+  const articleId = parseInt(req.params.articleId, 10);
+  const { componentName, fabricName, totalMetersReceived } = req.body;
+  if (!componentName || !fabricName) {
+    res.status(400).json({ error: "Component name and fabric name are required" });
     return;
   }
 
-  const parsed = CreateArticleComponentBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  const [comp] = await db.insert(articleComponentsTable).values({
+    articleId, componentName, fabricName, totalMetersReceived: totalMetersReceived || 0,
+  }).returning();
 
-  const [component] = await db
-    .insert(articleComponentsTable)
-    .values({ ...parsed.data, articleId: params.data.articleId })
-    .returning();
-
-  res.status(201).json(component);
-});
-
-router.put("/articles/:articleId/components/bulk", async (req, res): Promise<void> => {
-  const params = BulkUpdateComponentsParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-
-  const parsed = BulkUpdateComponentsBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
-  await db
-    .delete(articleComponentsTable)
-    .where(eq(articleComponentsTable.articleId, params.data.articleId));
-
-  const components = [];
-  for (const comp of parsed.data.components) {
-    const [created] = await db
-      .insert(articleComponentsTable)
-      .values({ ...comp, articleId: params.data.articleId })
-      .returning();
-    components.push(created);
-  }
-
-  res.json(BulkUpdateComponentsResponse.parse(components));
+  res.status(201).json(comp);
 });
 
 router.patch("/components/:id", async (req, res): Promise<void> => {
-  const params = UpdateComponentParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
+  const id = parseInt(req.params.id, 10);
+  const { componentName, fabricName, totalMetersReceived } = req.body;
 
-  const parsed = UpdateComponentBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
-  const [component] = await db
+  const [comp] = await db
     .update(articleComponentsTable)
-    .set(parsed.data)
-    .where(eq(articleComponentsTable.id, params.data.id))
+    .set({ componentName, fabricName, totalMetersReceived })
+    .where(eq(articleComponentsTable.id, id))
     .returning();
 
-  if (!component) {
+  if (!comp) {
     res.status(404).json({ error: "Component not found" });
     return;
   }
-
-  res.json(UpdateComponentResponse.parse(component));
+  res.json(comp);
 });
 
 router.delete("/components/:id", async (req, res): Promise<void> => {
-  const params = DeleteComponentParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-
-  const [component] = await db
-    .delete(articleComponentsTable)
-    .where(eq(articleComponentsTable.id, params.data.id))
-    .returning();
-
-  if (!component) {
+  const id = parseInt(req.params.id, 10);
+  const [comp] = await db.delete(articleComponentsTable).where(eq(articleComponentsTable.id, id)).returning();
+  if (!comp) {
     res.status(404).json({ error: "Component not found" });
     return;
   }
-
   res.sendStatus(204);
 });
 

@@ -13,11 +13,10 @@ Stitching Production ERP — complete garment/textile production management syst
 - **API framework**: Express 5
 - **Database**: PostgreSQL + Drizzle ORM
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec) — used for Module 1 (Fabric Store)
 - **Build**: esbuild (CJS bundle)
 - **Frontend**: React + Vite + Tailwind CSS v4 + shadcn/ui
 - **Routing**: wouter
-- **Data fetching**: TanStack React Query + Orval hooks (Module 1), direct fetch via `lib/api.ts` (Modules 2-7)
+- **Data fetching**: Direct fetch via `lib/api.ts` (apiGet, apiPost, apiPatch, apiDelete) for all modules
 - **Object Storage**: Google Cloud Storage via Replit object storage
 
 ## Artifacts
@@ -29,19 +28,15 @@ Stitching Production ERP — complete garment/textile production management syst
 
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
-- `pnpm --filter @workspace/scripts run seed` — seed database with sample data
 
 ## Database Schema
 
 ### Module 1 - Fabric Store
-- **articles**: article definitions (code, name, fabric type, season, category, collection)
-- **article_components**: fabric components per article (shirt, trouser, dupatta, etc.) with meters/wastage
-- **component_templates**: reusable component templates
-- **template_items**: items within templates
-- **grn_entries**: Goods Receipt Notes tracking fabric stock from suppliers
+- **articles**: article definitions (articleCode, articleName, collectionName, partType [Apna/Bahir Ka/SMD/Export], category [Summer/Winter/Spring/Fall], piecesType [Single Shirt/2PC/3PC/4PC])
+- **article_components**: fabric components per article (componentName, fabricName, totalMetersReceived)
+- **article_accessories**: accessories per article (accessoryName, quantity, meters, ratePerUnit, totalAmount auto-calculated)
 
 ### Shared
 - **masters**: all masters/workers (cutting, stitching, overlock, button, finishing) with name, phone, machine no, rate
@@ -77,12 +72,9 @@ Stitching Production ERP — complete garment/textile production management syst
 ## Frontend Pages
 
 ### Fabric Store (Module 1)
-- Dashboard — summary cards, recent activity, low stock alerts
-- Articles — list, create, detail with component management
-- GRN — list and create goods receipts
-- Inventory — stock overview per article with low stock alerts
-- Templates — create and manage component templates
-- Reports — stock summary, fabric by type, low stock tabs
+- Dashboard — summary cards (Active Articles, Total Fabric, Cutting Jobs, Final Store), Production Pipeline visualization, Recent Activity
+- Articles — list with search/filter by category, create with Part Type/Category/Pieces Type dropdowns, detail with component + accessory management
+- Reports — articles table, cutting output, stitching output, master performance tabs with print support
 
 ### Production (Modules 2-7)
 - Cutting — job list, create, detail with master assignments + size breakdown + completion
@@ -95,17 +87,15 @@ Stitching Production ERP — complete garment/textile production management syst
 ### Management
 - Masters — registry of all masters with search, filter by type, CRUD
 - Accounts — ledger overview, per-master transaction history, payment recording
-- Reports — stock summary, fabric by type, low stock
+- Reports — multi-tab with articles, cutting output, stitching output, master performance
 
 ## API Routes
 
 All routes prefixed with `/api/`:
 - Articles CRUD + toggle-active
-- Components CRUD + bulk update
-- Templates CRUD + apply to article
-- GRN CRUD
-- Inventory summary, low-stock alerts, per-article stock
-- Dashboard summary, recent activity, fabric by type
+- Components CRUD (per-article)
+- Accessories CRUD (per-article, auto-calculates totalAmount)
+- Dashboard summary, recent activity, production pipeline, production reports
 - Masters CRUD + filter by type
 - Sizes list/create/delete
 - Cutting jobs CRUD + assignments + complete with auto-credit
@@ -125,5 +115,6 @@ All routes prefixed with `/api/`:
 - Stitching assignments support transfer: deduct quantity from original, create new assignment for new master
 - Job status auto-updates to "in_progress" when first assignment is created
 - All money flows tracked in master_transactions for full audit trail
+- Accessory totalAmount = quantity * ratePerUnit (auto-calculated on insert/update)
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.

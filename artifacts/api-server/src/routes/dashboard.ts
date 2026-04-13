@@ -1,12 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, sql, gte } from "drizzle-orm";
-import { db, articlesTable, grnEntriesTable, cuttingJobsTable, cuttingAssignmentsTable, stitchingJobsTable, stitchingAssignmentsTable, qcEntriesTable, overlockButtonEntriesTable, finishingEntriesTable, finalStoreReceiptsTable, mastersTable, masterAccountsTable } from "@workspace/db";
-import {
-  GetDashboardSummaryResponse,
-  GetRecentActivityQueryParams,
-  GetRecentActivityResponse,
-  GetFabricByTypeResponse,
-} from "@workspace/api-zod";
+import { eq, sql } from "drizzle-orm";
+import { db, articlesTable, articleComponentsTable, cuttingJobsTable, stitchingJobsTable, qcEntriesTable, overlockButtonEntriesTable, finishingEntriesTable, finalStoreReceiptsTable, mastersTable, masterAccountsTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -20,33 +14,10 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
 
   const [fabricStats] = await db
     .select({
-      totalFabricMeters: sql<number>`COALESCE(SUM(${grnEntriesTable.totalMeters}), 0)`,
-      totalGrnEntries: sql<number>`COUNT(*)`,
-      totalStockValue: sql<number>`COALESCE(SUM(${grnEntriesTable.totalCost}), 0)`,
+      totalMeters: sql<number>`COALESCE(SUM(${articleComponentsTable.totalMetersReceived}), 0)`,
+      totalComponents: sql<number>`COUNT(*)`,
     })
-    .from(grnEntriesTable);
-
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-  const [recentStats] = await db
-    .select({
-      recentGrnCount: sql<number>`COUNT(*)`,
-    })
-    .from(grnEntriesTable)
-    .where(gte(grnEntriesTable.createdAt, thirtyDaysAgo));
-
-  const lowStockThreshold = 50;
-  const lowStockArticles = await db
-    .select({
-      articleId: articlesTable.id,
-      total: sql<number>`COALESCE(SUM(${grnEntriesTable.totalMeters}), 0)`,
-    })
-    .from(articlesTable)
-    .leftJoin(grnEntriesTable, eq(articlesTable.id, grnEntriesTable.articleId))
-    .where(eq(articlesTable.isActive, true))
-    .groupBy(articlesTable.id)
-    .having(sql`COALESCE(SUM(${grnEntriesTable.totalMeters}), 0) < ${lowStockThreshold}`);
+    .from(articleComponentsTable);
 
   const topCategories = await db
     .select({
@@ -58,66 +29,42 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
     .orderBy(sql`COUNT(*) DESC`)
     .limit(5);
 
-  res.json(GetDashboardSummaryResponse.parse({
+  res.json({
     totalArticles: Number(articleStats.totalArticles),
     activeArticles: Number(articleStats.activeArticles),
-    totalFabricMeters: Number(fabricStats.totalFabricMeters),
-    totalGrnEntries: Number(fabricStats.totalGrnEntries),
-    totalStockValue: Number(fabricStats.totalStockValue),
-    lowStockCount: lowStockArticles.length,
-    recentGrnCount: Number(recentStats.recentGrnCount),
+    totalFabricMeters: Number(fabricStats.totalMeters),
+    totalComponents: Number(fabricStats.totalComponents),
     topCategories: topCategories.map(c => ({
       category: c.category,
       count: Number(c.count),
     })),
-  }));
+  });
 });
 
 router.get("/dashboard/recent-activity", async (req, res): Promise<void> => {
-  const params = GetRecentActivityQueryParams.safeParse(req.query);
-  const limit = params.success && params.data.limit ? params.data.limit : 10;
+  const limit = parseInt(req.query.limit as string) || 10;
 
-  const recentGrn = await db
+  const recentArticles = await db
     .select({
-      id: grnEntriesTable.id,
-      grnNumber: grnEntriesTable.grnNumber,
-      supplierName: grnEntriesTable.supplierName,
-      totalMeters: grnEntriesTable.totalMeters,
+      id: articlesTable.id,
+      articleCode: articlesTable.articleCode,
       articleName: articlesTable.articleName,
-      createdAt: grnEntriesTable.createdAt,
-    })
-    .from(grnEntriesTable)
-    .leftJoin(articlesTable, eq(grnEntriesTable.articleId, articlesTable.id))
-    .orderBy(sql`${grnEntriesTable.createdAt} DESC`)
-    .limit(limit);
-
-  const activities = recentGrn.map((grn) => ({
-    id: grn.id,
-    type: "GRN_RECEIVED",
-    description: `${grn.grnNumber}: ${grn.totalMeters}m of ${grn.articleName || "Unknown"} from ${grn.supplierName}`,
-    timestamp: grn.createdAt,
-    metadata: {},
-  }));
-
-  res.json(GetRecentActivityResponse.parse(activities));
-});
-
-router.get("/dashboard/fabric-by-type", async (_req, res): Promise<void> => {
-  const result = await db
-    .select({
-      fabricType: articlesTable.fabricType,
-      totalMeters: sql<number>`COALESCE(SUM(${grnEntriesTable.totalMeters}), 0)`,
-      articleCount: sql<number>`COUNT(DISTINCT ${articlesTable.id})`,
+      category: articlesTable.category,
+      piecesType: articlesTable.piecesType,
+      createdAt: articlesTable.createdAt,
     })
     .from(articlesTable)
-    .leftJoin(grnEntriesTable, eq(articlesTable.id, grnEntriesTable.articleId))
-    .groupBy(articlesTable.fabricType);
+    .orderBy(sql`${articlesTable.createdAt} DESC`)
+    .limit(limit);
 
-  res.json(GetFabricByTypeResponse.parse(result.map(r => ({
-    fabricType: r.fabricType,
-    totalMeters: Number(r.totalMeters),
-    articleCount: Number(r.articleCount),
-  }))));
+  const activities = recentArticles.map((a) => ({
+    id: a.id,
+    type: "ARTICLE_ADDED",
+    description: `${a.articleCode}: ${a.articleName} (${a.piecesType} - ${a.category})`,
+    timestamp: a.createdAt,
+  }));
+
+  res.json(activities);
 });
 
 router.get("/dashboard/pipeline", async (_req, res): Promise<void> => {

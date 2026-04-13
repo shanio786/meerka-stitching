@@ -2,9 +2,6 @@ import { Link, useLocation } from "wouter";
 import { 
   LayoutDashboard, 
   Package, 
-  FileBox, 
-  Warehouse, 
-  BookTemplate, 
   BarChart3,
   Menu,
   Bell,
@@ -16,8 +13,6 @@ import {
   Store,
   Users,
   Wallet,
-  ChevronDown,
-  ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -40,9 +35,6 @@ const navGroups: NavGroup[] = [
     label: "Fabric Store",
     items: [
       { name: "Articles", href: "/articles", icon: Package },
-      { name: "GRN", href: "/grn", icon: FileBox },
-      { name: "Inventory", href: "/inventory", icon: Warehouse },
-      { name: "Templates", href: "/templates", icon: BookTemplate },
     ],
   },
   {

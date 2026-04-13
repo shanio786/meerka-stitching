@@ -7,13 +7,8 @@ export const articleComponentsTable = pgTable("article_components", {
   id: serial("id").primaryKey(),
   articleId: integer("article_id").notNull().references(() => articlesTable.id, { onDelete: "cascade" }),
   componentName: text("component_name").notNull(),
-  componentType: text("component_type").notNull().default("Main"),
-  fabricType: text("fabric_type"),
-  color: text("color"),
-  designPrint: text("design_print"),
-  requiredMeters: doublePrecision("required_meters").notNull(),
-  unitType: text("unit_type").notNull().default("Meter"),
-  wastagePercent: doublePrecision("wastage_percent"),
+  fabricName: text("fabric_name").notNull(),
+  totalMetersReceived: doublePrecision("total_meters_received").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -1,224 +1,134 @@
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { useState } from "react";
 import { useLocation } from "wouter";
-import { useCreateArticle, getListArticlesQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { apiPost } from "@/lib/api";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Save, ArrowLeft } from "lucide-react";
-import { Link } from "wouter";
-
-const formSchema = z.object({
-  articleCode: z.string().min(1, "Required"),
-  articleName: z.string().min(1, "Required"),
-  collectionName: z.string().optional().nullable(),
-  brandCustomer: z.string().optional().nullable(),
-  fabricType: z.string().min(1, "Required"),
-  season: z.string().min(1, "Required"),
-  category: z.string().min(1, "Required"),
-});
 
 export default function ArticleForm() {
-  const [, setLocation] = useLocation();
-  const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const { toast } = useToast();
-  const createArticle = useCreateArticle();
+  const [loading, setLoading] = useState(false);
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      articleCode: "",
-      articleName: "",
-      collectionName: "",
-      brandCustomer: "",
-      fabricType: "",
-      season: "",
-      category: "",
-    },
+  const [form, setForm] = useState({
+    articleCode: "",
+    articleName: "",
+    collectionName: "",
+    partType: "",
+    category: "",
+    piecesType: "",
   });
 
-  const onSubmit = (values: z.infer<typeof formSchema>) => {
-    createArticle.mutate(
-      { data: values },
-      {
-        onSuccess: (article) => {
-          queryClient.invalidateQueries({ queryKey: getListArticlesQueryKey() });
-          toast({ title: "Article created successfully" });
-          setLocation(`/articles/${article.id}`);
-        },
-        onError: (err: any) => {
-          toast({ title: "Error", description: err?.data?.error || "Failed to create article", variant: "destructive" });
-        },
-      }
-    );
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.articleCode || !form.articleName || !form.partType || !form.category || !form.piecesType) {
+      toast({ title: "Error", description: "Please fill all required fields", variant: "destructive" });
+      return;
+    }
+    setLoading(true);
+    try {
+      const article = await apiPost("/articles", form);
+      toast({ title: "Article created successfully" });
+      navigate(`/articles/${article.id}`);
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="New Article"
-        description="Define a new fabric article"
-        actions={
-          <Link href="/articles">
-            <Button variant="outline" data-testid="button-back">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back
-            </Button>
-          </Link>
-        }
-      />
+      <PageHeader title="New Article" description="Add a new article to the fabric store" />
 
       <Card className="max-w-2xl">
         <CardHeader>
           <CardTitle>Article Details</CardTitle>
         </CardHeader>
         <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="articleCode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Article Code</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g. LS-3PC-24" {...field} data-testid="input-article-code" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Article Code *</Label>
+                <Input
+                  placeholder="e.g. LS-3PC-001"
+                  value={form.articleCode}
+                  onChange={e => setForm(f => ({ ...f, articleCode: e.target.value }))}
                 />
-                <FormField
-                  control={form.control}
-                  name="articleName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Article Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g. Ladies Summer 3PC" {...field} data-testid="input-article-name" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+              </div>
+              <div className="space-y-2">
+                <Label>Article Name *</Label>
+                <Input
+                  placeholder="e.g. Ladies Summer 3PC"
+                  value={form.articleName}
+                  onChange={e => setForm(f => ({ ...f, articleName: e.target.value }))}
                 />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Collection Name</Label>
+              <Input
+                placeholder="e.g. Summer Collection 2026"
+                value={form.collectionName}
+                onChange={e => setForm(f => ({ ...f, collectionName: e.target.value }))}
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Part Type *</Label>
+                <Select value={form.partType} onValueChange={v => setForm(f => ({ ...f, partType: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Apna">Apna (Own)</SelectItem>
+                    <SelectItem value="Bahir Ka">Bahir Ka (Outside)</SelectItem>
+                    <SelectItem value="SMD">SMD</SelectItem>
+                    <SelectItem value="Export">Export</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="collectionName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Collection Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g. Summer 2026" {...field} value={field.value || ""} data-testid="input-collection" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="brandCustomer"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Brand / Customer</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Optional" {...field} value={field.value || ""} data-testid="input-brand" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              <div className="space-y-2">
+                <Label>Category *</Label>
+                <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Summer">Summer</SelectItem>
+                    <SelectItem value="Winter">Winter</SelectItem>
+                    <SelectItem value="Spring">Spring</SelectItem>
+                    <SelectItem value="Fall">Fall</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <FormField
-                  control={form.control}
-                  name="fabricType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Fabric Type</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-fabric-type">
-                            <SelectValue placeholder="Select" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Lawn">Lawn</SelectItem>
-                          <SelectItem value="Cotton">Cotton</SelectItem>
-                          <SelectItem value="Khaddar">Khaddar</SelectItem>
-                          <SelectItem value="Chiffon">Chiffon</SelectItem>
-                          <SelectItem value="Denim">Denim</SelectItem>
-                          <SelectItem value="Silk">Silk</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="season"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Season</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-season">
-                            <SelectValue placeholder="Select" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Summer">Summer</SelectItem>
-                          <SelectItem value="Winter">Winter</SelectItem>
-                          <SelectItem value="All Season">All Season</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="category"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Category</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-category">
-                            <SelectValue placeholder="Select" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="3PC">3PC</SelectItem>
-                          <SelectItem value="2PC">2PC</SelectItem>
-                          <SelectItem value="Kurti">Kurti</SelectItem>
-                          <SelectItem value="Suit">Suit</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              <div className="space-y-2">
+                <Label>Pieces Type *</Label>
+                <Select value={form.piecesType} onValueChange={v => setForm(f => ({ ...f, piecesType: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Single Shirt">Single Shirt</SelectItem>
+                    <SelectItem value="2PC">2PC</SelectItem>
+                    <SelectItem value="3PC">3PC</SelectItem>
+                    <SelectItem value="4PC">4PC</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+            </div>
 
-              <div className="flex justify-end pt-4">
-                <Button type="submit" disabled={createArticle.isPending} data-testid="button-submit">
-                  <Save className="mr-2 h-4 w-4" />
-                  {createArticle.isPending ? "Creating..." : "Create Article"}
-                </Button>
-              </div>
-            </form>
-          </Form>
+            <div className="flex gap-3 pt-4">
+              <Button type="submit" disabled={loading}>
+                {loading ? "Creating..." : "Create Article"}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => navigate("/articles")}>
+                Cancel
+              </Button>
+            </div>
+          </form>
         </CardContent>
       </Card>
     </div>

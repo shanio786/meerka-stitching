@@ -1,311 +1,302 @@
-import { useState } from "react";
-import { useRoute, Link, useLocation } from "wouter";
-import {
-  useGetArticle, getGetArticleQueryKey,
-  useUpdateArticle,
-  useDeleteArticle,
-  useBulkUpdateComponents,
-  useListTemplates, getListTemplatesQueryKey,
-  useApplyTemplate,
-  getListArticlesQueryKey,
-} from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { PageHeader } from "@/components/layout/PageHeader";
+import { useState, useEffect } from "react";
+import { useRoute, useLocation } from "wouter";
+import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ArrowLeft, Plus, Trash2, Edit2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Plus, Trash2, Save, BookTemplate } from "lucide-react";
 
-interface ComponentRow {
+interface Component {
+  id: number;
   componentName: string;
-  componentType: string;
-  fabricType: string;
-  color: string;
-  designPrint: string;
-  requiredMeters: number;
-  unitType: string;
-  wastagePercent: number;
+  fabricName: string;
+  totalMetersReceived: number;
 }
 
-export default function ArticleDetail() {
+interface Accessory {
+  id: number;
+  accessoryName: string;
+  quantity: number;
+  meters: number | null;
+  ratePerUnit: number | null;
+  totalAmount: number | null;
+}
+
+interface ArticleDetail {
+  id: number;
+  articleCode: string;
+  articleName: string;
+  collectionName: string | null;
+  partType: string;
+  category: string;
+  piecesType: string;
+  isActive: boolean;
+  components: Component[];
+  accessories: Accessory[];
+}
+
+export default function ArticleDetailPage() {
   const [, params] = useRoute("/articles/:id");
-  const [, setLocation] = useLocation();
-  const articleId = params?.id ? parseInt(params.id, 10) : 0;
-  const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const { toast } = useToast();
+  const id = params?.id;
 
-  const { data: article, isLoading } = useGetArticle(articleId, {
-    query: { enabled: !!articleId, queryKey: getGetArticleQueryKey(articleId) }
-  });
+  const [article, setArticle] = useState<ArticleDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [compOpen, setCompOpen] = useState(false);
+  const [accOpen, setAccOpen] = useState(false);
+  const [compForm, setCompForm] = useState({ componentName: "", fabricName: "", totalMetersReceived: 0 });
+  const [accForm, setAccForm] = useState({ accessoryName: "", quantity: 0, meters: 0, ratePerUnit: 0 });
 
-  const { data: templates } = useListTemplates({
-    query: { queryKey: getListTemplatesQueryKey() }
-  });
+  const loadArticle = () => {
+    if (!id) return;
+    apiGet<ArticleDetail>(`/articles/${id}`)
+      .then(setArticle)
+      .catch(() => navigate("/articles"))
+      .finally(() => setLoading(false));
+  };
 
-  const updateArticle = useUpdateArticle();
-  const deleteArticle = useDeleteArticle();
-  const bulkUpdate = useBulkUpdateComponents();
-  const applyTemplate = useApplyTemplate();
+  useEffect(() => { loadArticle(); }, [id]);
 
-  const [components, setComponents] = useState<ComponentRow[]>([]);
-  const [initialized, setInitialized] = useState(false);
+  const addComponent = async () => {
+    if (!compForm.componentName || !compForm.fabricName) {
+      toast({ title: "Error", description: "Component name and fabric are required", variant: "destructive" });
+      return;
+    }
+    try {
+      await apiPost(`/articles/${id}/components`, compForm);
+      setCompForm({ componentName: "", fabricName: "", totalMetersReceived: 0 });
+      setCompOpen(false);
+      toast({ title: "Component added" });
+      loadArticle();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
 
-  if (article && !initialized) {
-    setComponents(
-      (article.components || []).map((c) => ({
-        componentName: c.componentName,
-        componentType: c.componentType,
-        fabricType: c.fabricType || "",
-        color: c.color || "",
-        designPrint: c.designPrint || "",
-        requiredMeters: c.requiredMeters,
-        unitType: c.unitType,
-        wastagePercent: c.wastagePercent || 0,
-      }))
-    );
-    setInitialized(true);
+  const deleteComponent = async (compId: number) => {
+    if (!confirm("Delete this component?")) return;
+    try {
+      await apiDelete(`/components/${compId}`);
+      toast({ title: "Component deleted" });
+      loadArticle();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const addAccessory = async () => {
+    if (!accForm.accessoryName) {
+      toast({ title: "Error", description: "Accessory name is required", variant: "destructive" });
+      return;
+    }
+    try {
+      await apiPost(`/articles/${id}/accessories`, accForm);
+      setAccForm({ accessoryName: "", quantity: 0, meters: 0, ratePerUnit: 0 });
+      setAccOpen(false);
+      toast({ title: "Accessory added" });
+      loadArticle();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const deleteAccessory = async (accId: number) => {
+    if (!confirm("Delete this accessory?")) return;
+    try {
+      await apiDelete(`/accessories/${accId}`);
+      toast({ title: "Accessory deleted" });
+      loadArticle();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleDeleteArticle = async () => {
+    if (!confirm("Delete this entire article? This cannot be undone.")) return;
+    try {
+      await apiDelete(`/articles/${id}`);
+      toast({ title: "Article deleted" });
+      navigate("/articles");
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  if (loading) {
+    return <div className="space-y-4"><Skeleton className="h-8 w-64" /><Skeleton className="h-40 w-full" /></div>;
   }
 
-  const addComponent = () => {
-    setComponents([...components, {
-      componentName: "",
-      componentType: "Main",
-      fabricType: "",
-      color: "",
-      designPrint: "",
-      requiredMeters: 0,
-      unitType: "Meter",
-      wastagePercent: 0,
-    }]);
-  };
+  if (!article) return null;
 
-  const removeComponent = (index: number) => {
-    setComponents(components.filter((_, i) => i !== index));
-  };
-
-  const updateComponent = (index: number, field: keyof ComponentRow, value: string | number) => {
-    const updated = [...components];
-    (updated[index] as any)[field] = value;
-    setComponents(updated);
-  };
-
-  const saveComponents = () => {
-    bulkUpdate.mutate(
-      { articleId, data: { components: components.map(c => ({ ...c, fabricType: c.fabricType || null, color: c.color || null, designPrint: c.designPrint || null, wastagePercent: c.wastagePercent || null })) } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetArticleQueryKey(articleId) });
-          queryClient.invalidateQueries({ queryKey: getListArticlesQueryKey() });
-          toast({ title: "Components saved" });
-        },
-      }
-    );
-  };
-
-  const handleApplyTemplate = (templateId: number) => {
-    applyTemplate.mutate(
-      { id: templateId, articleId },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetArticleQueryKey(articleId) });
-          setInitialized(false);
-          toast({ title: "Template applied" });
-        },
-      }
-    );
-  };
-
-  const handleDelete = () => {
-    if (!confirm("Are you sure? This will delete the article and all its components.")) return;
-    deleteArticle.mutate({ id: articleId }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListArticlesQueryKey() });
-        toast({ title: "Article deleted" });
-        setLocation("/articles");
-      },
-    });
-  };
-
-  const totalFabric = components.reduce((sum, c) => sum + (c.requiredMeters || 0), 0);
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
-  }
-
-  if (!article) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-lg font-medium text-muted-foreground">Article not found</p>
-        <Link href="/articles"><Button variant="outline" className="mt-4">Back to Articles</Button></Link>
-      </div>
-    );
-  }
+  const totalMeters = article.components.reduce((s, c) => s + c.totalMetersReceived, 0);
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={article.articleName}
-        description={`${article.articleCode} - ${article.fabricType} - ${article.category}`}
-        actions={
-          <div className="flex gap-2">
-            <Link href="/articles">
-              <Button variant="outline" data-testid="button-back">
-                <ArrowLeft className="mr-2 h-4 w-4" /> Back
-              </Button>
-            </Link>
-            <Button variant="destructive" onClick={handleDelete} data-testid="button-delete-article">
-              <Trash2 className="mr-2 h-4 w-4" /> Delete
-            </Button>
-          </div>
-        }
-      />
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="icon" onClick={() => navigate("/articles")}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold">{article.articleCode}</h1>
+          <p className="text-muted-foreground">{article.articleName}</p>
+        </div>
+        <Button variant="destructive" size="sm" onClick={handleDeleteArticle}>Delete Article</Button>
+      </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-5">
         <Card>
-          <CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">Article Code</CardTitle></CardHeader>
-          <CardContent><p className="text-lg font-bold font-mono" data-testid="text-article-code">{article.articleCode}</p></CardContent>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Part Type</CardTitle></CardHeader>
+          <CardContent><Badge variant="outline" className="text-base">{article.partType}</Badge></CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">Collection</CardTitle></CardHeader>
-          <CardContent><p className="text-lg font-medium" data-testid="text-collection">{article.collectionName || "-"}</p></CardContent>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Category</CardTitle></CardHeader>
+          <CardContent><p className="text-lg font-bold">{article.category}</p></CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">Total Fabric/Unit</CardTitle></CardHeader>
-          <CardContent><p className="text-lg font-bold text-primary" data-testid="text-total-fabric">{totalFabric.toFixed(2)} meters</p></CardContent>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Pieces Type</CardTitle></CardHeader>
+          <CardContent><Badge className="text-base">{article.piecesType}</Badge></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Collection</CardTitle></CardHeader>
+          <CardContent><p className="text-lg font-bold">{article.collectionName || "-"}</p></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Total Meters</CardTitle></CardHeader>
+          <CardContent><p className="text-lg font-bold">{totalMeters}m</p></CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Components</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">Define what goes into each unit of this article</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {templates && templates.length > 0 && (
-              <Select onValueChange={(v) => handleApplyTemplate(parseInt(v, 10))}>
-                <SelectTrigger className="w-[180px]" data-testid="select-apply-template">
-                  <BookTemplate className="mr-2 h-4 w-4" />
-                  <SelectValue placeholder="Apply Template" />
-                </SelectTrigger>
-                <SelectContent>
-                  {templates.map(t => (
-                    <SelectItem key={t.id} value={String(t.id)}>{t.templateName}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            <Button variant="outline" onClick={addComponent} data-testid="button-add-component">
-              <Plus className="mr-2 h-4 w-4" /> Add Component
-            </Button>
-          </div>
+          <CardTitle>Fabric Components</CardTitle>
+          <Dialog open={compOpen} onOpenChange={setCompOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="gap-1"><Plus className="h-4 w-4" /> Add Component</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Add Fabric Component</DialogTitle></DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Component Name *</Label>
+                  <Input placeholder="e.g. Shirt, Trouser, Dupatta" value={compForm.componentName} onChange={e => setCompForm(f => ({ ...f, componentName: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Fabric Name *</Label>
+                  <Input placeholder="e.g. Lawn, Cotton, Chiffon" value={compForm.fabricName} onChange={e => setCompForm(f => ({ ...f, fabricName: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Total Meters Received</Label>
+                  <Input type="number" step="0.1" value={compForm.totalMetersReceived} onChange={e => setCompForm(f => ({ ...f, totalMetersReceived: parseFloat(e.target.value) || 0 }))} />
+                </div>
+                <Button onClick={addComponent} className="w-full">Add Component</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </CardHeader>
         <CardContent>
-          {components.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>No components defined yet</p>
-              <p className="text-sm mt-1">Add components like Shirt, Trouser, Dupatta etc.</p>
-            </div>
+          {!article.components.length ? (
+            <div className="text-center py-8 text-muted-foreground">No components added yet</div>
           ) : (
-            <div className="space-y-3">
-              {components.map((comp, index) => (
-                <div key={index} className="grid grid-cols-12 gap-2 items-end p-3 bg-muted/30 rounded-lg" data-testid={`component-row-${index}`}>
-                  <div className="col-span-12 sm:col-span-2">
-                    <label className="text-xs text-muted-foreground">Name</label>
-                    <Input
-                      value={comp.componentName}
-                      onChange={(e) => updateComponent(index, "componentName", e.target.value)}
-                      placeholder="Shirt"
-                      data-testid={`input-comp-name-${index}`}
-                    />
-                  </div>
-                  <div className="col-span-6 sm:col-span-1">
-                    <label className="text-xs text-muted-foreground">Type</label>
-                    <Select value={comp.componentType} onValueChange={(v) => updateComponent(index, "componentType", v)}>
-                      <SelectTrigger data-testid={`select-comp-type-${index}`}><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Main">Main</SelectItem>
-                        <SelectItem value="Optional">Optional</SelectItem>
-                        <SelectItem value="Extra">Extra</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-6 sm:col-span-2">
-                    <label className="text-xs text-muted-foreground">Fabric</label>
-                    <Input
-                      value={comp.fabricType}
-                      onChange={(e) => updateComponent(index, "fabricType", e.target.value)}
-                      placeholder="Lawn"
-                      data-testid={`input-comp-fabric-${index}`}
-                    />
-                  </div>
-                  <div className="col-span-6 sm:col-span-1">
-                    <label className="text-xs text-muted-foreground">Color</label>
-                    <Input
-                      value={comp.color}
-                      onChange={(e) => updateComponent(index, "color", e.target.value)}
-                      placeholder="Blue"
-                      data-testid={`input-comp-color-${index}`}
-                    />
-                  </div>
-                  <div className="col-span-6 sm:col-span-2">
-                    <label className="text-xs text-muted-foreground">Meters</label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={comp.requiredMeters || ""}
-                      onChange={(e) => updateComponent(index, "requiredMeters", parseFloat(e.target.value) || 0)}
-                      data-testid={`input-comp-meters-${index}`}
-                    />
-                  </div>
-                  <div className="col-span-6 sm:col-span-1">
-                    <label className="text-xs text-muted-foreground">Unit</label>
-                    <Select value={comp.unitType} onValueChange={(v) => updateComponent(index, "unitType", v)}>
-                      <SelectTrigger data-testid={`select-comp-unit-${index}`}><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Meter">Meter</SelectItem>
-                        <SelectItem value="Piece">Piece</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-6 sm:col-span-1">
-                    <label className="text-xs text-muted-foreground">Waste %</label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={comp.wastagePercent || ""}
-                      onChange={(e) => updateComponent(index, "wastagePercent", parseFloat(e.target.value) || 0)}
-                      data-testid={`input-comp-waste-${index}`}
-                    />
-                  </div>
-                  <div className="col-span-12 sm:col-span-2 flex items-end justify-between sm:justify-end gap-2">
-                    <Badge variant="secondary" className="text-xs">{comp.componentType}</Badge>
-                    <Button variant="ghost" size="icon" onClick={() => removeComponent(index)} data-testid={`button-remove-comp-${index}`}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Component</TableHead>
+                  <TableHead>Fabric</TableHead>
+                  <TableHead className="text-right">Meters Received</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {article.components.map(comp => (
+                  <TableRow key={comp.id}>
+                    <TableCell className="font-medium">{comp.componentName}</TableCell>
+                    <TableCell><Badge variant="secondary">{comp.fabricName}</Badge></TableCell>
+                    <TableCell className="text-right font-mono">{comp.totalMetersReceived}m</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" onClick={() => deleteComponent(comp.id)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
-              <div className="flex items-center justify-between pt-4 border-t">
-                <div className="text-sm font-medium">
-                  Total: <span className="text-primary font-bold">{totalFabric.toFixed(2)} meters</span> per unit
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Accessories / Extras</CardTitle>
+          <Dialog open={accOpen} onOpenChange={setAccOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="gap-1"><Plus className="h-4 w-4" /> Add Accessory</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Add Accessory</DialogTitle></DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Accessory Name *</Label>
+                  <Input placeholder="e.g. Patch, Lace, Button, Zipper" value={accForm.accessoryName} onChange={e => setAccForm(f => ({ ...f, accessoryName: e.target.value }))} />
                 </div>
-                <Button onClick={saveComponents} disabled={bulkUpdate.isPending} data-testid="button-save-components">
-                  <Save className="mr-2 h-4 w-4" />
-                  {bulkUpdate.isPending ? "Saving..." : "Save Components"}
-                </Button>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-2">
+                    <Label>Quantity</Label>
+                    <Input type="number" step="0.1" value={accForm.quantity} onChange={e => setAccForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Meters</Label>
+                    <Input type="number" step="0.1" value={accForm.meters} onChange={e => setAccForm(f => ({ ...f, meters: parseFloat(e.target.value) || 0 }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Rate/Unit</Label>
+                    <Input type="number" step="0.1" value={accForm.ratePerUnit} onChange={e => setAccForm(f => ({ ...f, ratePerUnit: parseFloat(e.target.value) || 0 }))} />
+                  </div>
+                </div>
+                <Button onClick={addAccessory} className="w-full">Add Accessory</Button>
               </div>
-            </div>
+            </DialogContent>
+          </Dialog>
+        </CardHeader>
+        <CardContent>
+          {!article.accessories.length ? (
+            <div className="text-center py-8 text-muted-foreground">No accessories added yet</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Accessory</TableHead>
+                  <TableHead className="text-right">Quantity</TableHead>
+                  <TableHead className="text-right">Meters</TableHead>
+                  <TableHead className="text-right">Rate/Unit</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {article.accessories.map(acc => (
+                  <TableRow key={acc.id}>
+                    <TableCell className="font-medium">{acc.accessoryName}</TableCell>
+                    <TableCell className="text-right">{acc.quantity}</TableCell>
+                    <TableCell className="text-right font-mono">{acc.meters || "-"}</TableCell>
+                    <TableCell className="text-right font-mono">Rs.{acc.ratePerUnit || 0}</TableCell>
+                    <TableCell className="text-right font-mono font-bold">Rs.{acc.totalAmount || 0}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" onClick={() => deleteAccessory(acc.id)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>
