@@ -63,6 +63,7 @@ router.patch("/overlock-button/:id/complete", async (req, res): Promise<void> =>
 
   const [existing] = await db.select().from(overlockButtonEntriesTable).where(eq(overlockButtonEntriesTable.id, id));
   if (!existing) { res.status(404).json({ error: "Entry not found" }); return; }
+  if (existing.status === "completed") { res.status(400).json({ error: "Entry already completed" }); return; }
 
   const totalAmount = (completedQty || 0) * (existing.ratePerPiece || 0);
 

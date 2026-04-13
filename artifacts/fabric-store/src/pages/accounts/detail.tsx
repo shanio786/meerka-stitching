@@ -10,14 +10,44 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Wallet, TrendingUp, CreditCard, Plus, ArrowDown, ArrowUp } from "lucide-react";
+import { Wallet, TrendingUp, CreditCard, Plus, ArrowDown, ArrowUp, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost } from "@/lib/api";
 import { format } from "date-fns";
 
+interface Transaction {
+  id: number;
+  date: string;
+  description: string;
+  type: string;
+  amount: number;
+}
+
+interface Payment {
+  id: number;
+  date: string;
+  amount: number;
+  paymentMethod: string;
+  notes: string | null;
+}
+
+interface AccountData {
+  masterName: string;
+  masterType: string;
+  balance: number;
+  totalEarned: number;
+  totalPaid: number;
+}
+
+interface LedgerData {
+  account: AccountData;
+  transactions: Transaction[];
+  payments: Payment[];
+}
+
 export default function AccountDetail() {
   const { masterId } = useParams<{ masterId: string }>();
-  const [ledger, setLedger] = useState<any>(null);
+  const [ledger, setLedger] = useState<LedgerData | null>(null);
   const [loading, setLoading] = useState(true);
   const [payDialog, setPayDialog] = useState(false);
   const { toast } = useToast();
@@ -26,7 +56,10 @@ export default function AccountDetail() {
 
   const fetchLedger = async () => {
     setLoading(true);
-    try { const data = await apiGet(`/accounts/${masterId}/ledger`); setLedger(data); } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    try { const data = await apiGet<LedgerData>(`/accounts/${masterId}/ledger`); setLedger(data); } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to load";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
     setLoading(false);
   };
 
@@ -42,7 +75,10 @@ export default function AccountDetail() {
       setPayDialog(false);
       setPayForm({ amount: "", paymentMethod: "cash", notes: "", date: new Date().toISOString().split("T")[0] });
       fetchLedger();
-    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to record";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
   };
 
   if (loading) return <div className="space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-64 w-full" /></div>;
@@ -51,32 +87,47 @@ export default function AccountDetail() {
   const { account, transactions, payments } = ledger;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 print-area">
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .print-area, .print-area * { visibility: visible; }
+          .print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; }
+          .no-print { display: none !important; }
+          @page { margin: 1cm; }
+        }
+      `}</style>
+
       <PageHeader title={account.masterName} description={`${account.masterType} master ledger`} actions={
-        <Dialog open={payDialog} onOpenChange={setPayDialog}>
-          <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4" /> Make Payment</Button></DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Record Payment</DialogTitle></DialogHeader>
-            <div className="space-y-4">
-              <div><Label>Amount (Rs.) *</Label><Input type="number" value={payForm.amount} onChange={e => setPayForm({ ...payForm, amount: e.target.value })} /></div>
-              <div><Label>Payment Method</Label>
-                <Select value={payForm.paymentMethod} onValueChange={v => setPayForm({ ...payForm, paymentMethod: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                    <SelectItem value="easypaisa">Easypaisa</SelectItem>
-                    <SelectItem value="jazzcash">JazzCash</SelectItem>
-                    <SelectItem value="cheque">Cheque</SelectItem>
-                  </SelectContent>
-                </Select>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => window.print()} className="gap-2 no-print">
+            <Printer className="h-4 w-4" /> Print
+          </Button>
+          <Dialog open={payDialog} onOpenChange={setPayDialog}>
+            <DialogTrigger asChild><Button className="no-print"><Plus className="mr-2 h-4 w-4" /> Make Payment</Button></DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Record Payment</DialogTitle></DialogHeader>
+              <div className="space-y-4">
+                <div><Label>Amount (Rs.) *</Label><Input type="number" value={payForm.amount} onChange={e => setPayForm({ ...payForm, amount: e.target.value })} /></div>
+                <div><Label>Payment Method</Label>
+                  <Select value={payForm.paymentMethod} onValueChange={v => setPayForm({ ...payForm, paymentMethod: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="easypaisa">Easypaisa</SelectItem>
+                      <SelectItem value="jazzcash">JazzCash</SelectItem>
+                      <SelectItem value="cheque">Cheque</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div><Label>Date</Label><Input type="date" value={payForm.date} onChange={e => setPayForm({ ...payForm, date: e.target.value })} /></div>
+                <div><Label>Notes</Label><Input value={payForm.notes} onChange={e => setPayForm({ ...payForm, notes: e.target.value })} placeholder="e.g. Weekly payment" /></div>
+                <Button className="w-full" onClick={handlePay}>Record Payment</Button>
               </div>
-              <div><Label>Date</Label><Input type="date" value={payForm.date} onChange={e => setPayForm({ ...payForm, date: e.target.value })} /></div>
-              <div><Label>Notes</Label><Input value={payForm.notes} onChange={e => setPayForm({ ...payForm, notes: e.target.value })} placeholder="e.g. Weekly payment" /></div>
-              <Button className="w-full" onClick={handlePay}>Record Payment</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       } />
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -101,7 +152,7 @@ export default function AccountDetail() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {transactions.map((t: any) => (
+                {transactions.map((t) => (
                   <TableRow key={t.id}>
                     <TableCell>{format(new Date(t.date), "MMM d, yyyy")}</TableCell>
                     <TableCell>{t.description}</TableCell>
@@ -136,7 +187,7 @@ export default function AccountDetail() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {payments.map((p: any) => (
+                {payments.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell>{format(new Date(p.date), "MMM d, yyyy")}</TableCell>
                     <TableCell><Badge variant="outline">{p.paymentMethod}</Badge></TableCell>

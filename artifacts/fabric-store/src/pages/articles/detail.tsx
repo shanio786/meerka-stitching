@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ArrowLeft, Plus, Trash2, Edit2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ImageUpload } from "@/components/ImageUpload";
 
 interface Component {
   id: number;
@@ -75,8 +76,9 @@ export default function ArticleDetailPage() {
       setCompOpen(false);
       toast({ title: "Component added" });
       loadArticle();
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed";
+      toast({ title: "Error", description: msg, variant: "destructive" });
     }
   };
 
@@ -86,8 +88,9 @@ export default function ArticleDetailPage() {
       await apiDelete(`/components/${compId}`);
       toast({ title: "Component deleted" });
       loadArticle();
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed";
+      toast({ title: "Error", description: msg, variant: "destructive" });
     }
   };
 
@@ -102,8 +105,9 @@ export default function ArticleDetailPage() {
       setAccOpen(false);
       toast({ title: "Accessory added" });
       loadArticle();
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed";
+      toast({ title: "Error", description: msg, variant: "destructive" });
     }
   };
 
@@ -113,8 +117,9 @@ export default function ArticleDetailPage() {
       await apiDelete(`/accessories/${accId}`);
       toast({ title: "Accessory deleted" });
       loadArticle();
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed";
+      toast({ title: "Error", description: msg, variant: "destructive" });
     }
   };
 
@@ -124,8 +129,9 @@ export default function ArticleDetailPage() {
       await apiDelete(`/articles/${id}`);
       toast({ title: "Article deleted" });
       navigate("/articles");
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed";
+      toast({ title: "Error", description: msg, variant: "destructive" });
     }
   };
 
@@ -298,6 +304,13 @@ export default function ArticleDetailPage() {
               </TableBody>
             </Table>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Images</CardTitle></CardHeader>
+        <CardContent>
+          <ImageUpload entityType="article" entityId={article.id} />
         </CardContent>
       </Card>
     </div>

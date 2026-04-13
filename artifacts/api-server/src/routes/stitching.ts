@@ -121,6 +121,7 @@ router.patch("/stitching/assignments/:id/complete", async (req, res): Promise<vo
 
   const [existing] = await db.select().from(stitchingAssignmentsTable).where(eq(stitchingAssignmentsTable.id, id));
   if (!existing) { res.status(404).json({ error: "Assignment not found" }); return; }
+  if (existing.status === "completed") { res.status(400).json({ error: "Assignment already completed" }); return; }
 
   const totalAmount = (piecesCompleted || 0) * existing.ratePerPiece;
 
@@ -152,6 +153,10 @@ router.patch("/stitching/assignments/:id/transfer", async (req, res): Promise<vo
 
   const [existing] = await db.select().from(stitchingAssignmentsTable).where(eq(stitchingAssignmentsTable.id, id));
   if (!existing) { res.status(404).json({ error: "Assignment not found" }); return; }
+  if (!quantityToTransfer || quantityToTransfer <= 0 || quantityToTransfer > existing.quantityGiven) {
+    res.status(400).json({ error: "Invalid transfer quantity" }); return;
+  }
+  if (!newMasterId) { res.status(400).json({ error: "New master is required" }); return; }
 
   const result = await db.transaction(async (tx) => {
     await tx.update(stitchingAssignmentsTable).set({

@@ -141,6 +141,7 @@ router.patch("/cutting/assignments/:id/complete", async (req, res): Promise<void
 
   const [existing] = await db.select().from(cuttingAssignmentsTable).where(eq(cuttingAssignmentsTable.id, id));
   if (!existing) { res.status(404).json({ error: "Assignment not found" }); return; }
+  if (existing.status === "completed") { res.status(400).json({ error: "Assignment already completed" }); return; }
 
   const rate = existing.ratePerPiece || existing.ratePerSuit || 0;
   const totalAmount = (piecesCut || 0) * rate;

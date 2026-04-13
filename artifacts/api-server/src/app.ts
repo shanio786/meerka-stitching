@@ -44,7 +44,7 @@ app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
     res.status(400).json({ error: "Referenced record does not exist" });
     return;
   }
-  res.status(500).json({ error: message });
+  res.status(500).json({ error: "Internal server error" });
 });
 
 export default app;

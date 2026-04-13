@@ -59,6 +59,7 @@ router.patch("/finishing/:id/complete", async (req, res): Promise<void> => {
 
   const [existing] = await db.select().from(finishingEntriesTable).where(eq(finishingEntriesTable.id, id));
   if (!existing) { res.status(404).json({ error: "Entry not found" }); return; }
+  if (existing.status === "completed") { res.status(400).json({ error: "Entry already completed" }); return; }
 
   const totalAmount = (packedQty || 0) * (existing.ratePerPiece || 0);
 

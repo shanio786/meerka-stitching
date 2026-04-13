@@ -31,11 +31,12 @@ export default function ArticleForm() {
     }
     setLoading(true);
     try {
-      const article = await apiPost("/articles", form);
+      const article = await apiPost<{ id: number }>("/articles", form);
       toast({ title: "Article created successfully" });
       navigate(`/articles/${article.id}`);
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to create";
+      toast({ title: "Error", description: msg, variant: "destructive" });
     } finally {
       setLoading(false);
     }

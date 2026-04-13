@@ -10,16 +10,34 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Eye } from "lucide-react";
+import { Plus, Eye, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost } from "@/lib/api";
 import { format } from "date-fns";
 
+interface StitchingJob {
+  id: number;
+  articleId: number;
+  articleName: string;
+  articleCode: string;
+  supervisorName: string;
+  jobDate: string;
+  status: string;
+  notes: string | null;
+}
+
+interface ArticleOption {
+  id: number;
+  articleCode: string;
+  articleName: string;
+}
+
 export default function StitchingJobs() {
-  const [jobs, setJobs] = useState<any[]>([]);
-  const [articles, setArticles] = useState<any[]>([]);
+  const [jobs, setJobs] = useState<StitchingJob[]>([]);
+  const [articles, setArticles] = useState<ArticleOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
 
@@ -29,11 +47,14 @@ export default function StitchingJobs() {
     setLoading(true);
     const params = new URLSearchParams();
     if (statusFilter !== "all") params.set("status", statusFilter);
-    try { const data = await apiGet(`/stitching/jobs?${params}`); setJobs(data); } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    try { const data = await apiGet<StitchingJob[]>(`/stitching/jobs?${params}`); setJobs(data); } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to load";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
     setLoading(false);
   };
 
-  const fetchArticles = async () => { try { const data = await apiGet("/articles"); setArticles(data); } catch {} };
+  const fetchArticles = async () => { try { const data = await apiGet<ArticleOption[]>("/articles"); setArticles(data); } catch {} };
 
   useEffect(() => { fetchJobs(); fetchArticles(); }, [statusFilter]);
 
@@ -45,8 +66,17 @@ export default function StitchingJobs() {
       setDialogOpen(false);
       setForm({ articleId: "", supervisorName: "", jobDate: new Date().toISOString().split("T")[0], notes: "" });
       fetchJobs();
-    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to create";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
   };
+
+  const filtered = jobs.filter(j => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return j.articleName.toLowerCase().includes(q) || j.articleCode.toLowerCase().includes(q) || j.supervisorName.toLowerCase().includes(q) || `STH-${String(j.id).padStart(4, "0")}`.toLowerCase().includes(q);
+  });
 
   return (
     <div className="space-y-6">
@@ -59,7 +89,7 @@ export default function StitchingJobs() {
               <div><Label>Article *</Label>
                 <Select value={form.articleId} onValueChange={v => setForm({ ...form, articleId: v })}>
                   <SelectTrigger><SelectValue placeholder="Select article" /></SelectTrigger>
-                  <SelectContent>{articles.map((a: any) => <SelectItem key={a.id} value={a.id.toString()}>{a.articleCode} - {a.articleName}</SelectItem>)}</SelectContent>
+                  <SelectContent>{articles.map(a => <SelectItem key={a.id} value={a.id.toString()}>{a.articleCode} - {a.articleName}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div><Label>Supervisor Name *</Label><Input value={form.supervisorName} onChange={e => setForm({ ...form, supervisorName: e.target.value })} /></div>
@@ -73,7 +103,11 @@ export default function StitchingJobs() {
 
       <Card>
         <CardContent className="pt-6">
-          <div className="flex gap-3 mb-6">
+          <div className="flex flex-col sm:flex-row gap-3 mb-6">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Search jobs..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
+            </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
@@ -87,7 +121,7 @@ export default function StitchingJobs() {
 
           {loading ? (
             <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full" />)}</div>
-          ) : !jobs.length ? (
+          ) : !filtered.length ? (
             <div className="text-center py-12 text-muted-foreground"><p className="text-lg font-medium">No stitching jobs</p></div>
           ) : (
             <Table>
@@ -102,7 +136,7 @@ export default function StitchingJobs() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {jobs.map((j) => (
+                {filtered.map(j => (
                   <TableRow key={j.id}>
                     <TableCell className="font-mono font-medium">STH-{String(j.id).padStart(4, "0")}</TableCell>
                     <TableCell><div className="font-medium">{j.articleName}</div><div className="text-xs text-muted-foreground">{j.articleCode}</div></TableCell>

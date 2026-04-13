@@ -111,10 +111,13 @@ All routes prefixed with `/api/`:
 ## Business Logic
 
 - When any assignment is marked "completed", the total amount (pieces x rate) is automatically credited to the master's account balance
+- Completion endpoints are idempotent — already-completed items are rejected (400) to prevent double-crediting
 - Payments deduct from balance
-- Stitching assignments support transfer: deduct quantity from original, create new assignment for new master
+- Stitching assignments support transfer: deduct quantity from original, create new assignment for new master; validates positive bounds
 - Job status auto-updates to "in_progress" when first assignment is created
 - All money flows tracked in master_transactions for full audit trail
 - Accessory totalAmount = quantity * ratePerUnit (auto-calculated on insert/update)
+- All frontend catch blocks use `catch (err: unknown)` pattern with `instanceof Error` check
+- ImageUpload uses `useEffect` for initial data fetch
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.

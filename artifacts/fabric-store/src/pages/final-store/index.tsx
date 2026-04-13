@@ -8,15 +8,31 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Trash2, Package } from "lucide-react";
+import { Plus, Trash2, Package, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, apiDelete } from "@/lib/api";
 import { format } from "date-fns";
 
+interface StoreEntry {
+  id: number;
+  articleId: number;
+  articleName: string;
+  articleCode: string;
+  receivedBy: string;
+  receivedFrom: string;
+  size: string | null;
+  packedQty: number;
+  notes: string | null;
+  date: string;
+}
+
+interface ArticleOption { id: number; articleCode: string; articleName: string; }
+
 export default function FinalStore() {
-  const [entries, setEntries] = useState<any[]>([]);
-  const [articles, setArticles] = useState<any[]>([]);
+  const [entries, setEntries] = useState<StoreEntry[]>([]);
+  const [articles, setArticles] = useState<ArticleOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
 
@@ -24,13 +40,16 @@ export default function FinalStore() {
 
   const fetchEntries = async () => {
     setLoading(true);
-    try { const data = await apiGet("/final-store"); setEntries(data); } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    try { const data = await apiGet<StoreEntry[]>("/final-store"); setEntries(data); } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to load";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
     setLoading(false);
   };
 
   useEffect(() => {
     fetchEntries();
-    apiGet("/articles").then(setArticles).catch(() => {});
+    apiGet<ArticleOption[]>("/articles").then(setArticles).catch(() => {});
   }, []);
 
   const handleCreate = async () => {
@@ -44,10 +63,19 @@ export default function FinalStore() {
       setDialogOpen(false);
       setForm({ articleId: "", receivedBy: "", receivedFrom: "", size: "", packedQty: "", notes: "", date: new Date().toISOString().split("T")[0] });
       fetchEntries();
-    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to create";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
   };
 
-  const totalPacked = entries.reduce((s, e) => s + e.packedQty, 0);
+  const filtered = entries.filter(e => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return e.articleName.toLowerCase().includes(q) || e.articleCode.toLowerCase().includes(q) || e.receivedBy.toLowerCase().includes(q) || e.receivedFrom.toLowerCase().includes(q);
+  });
+
+  const totalPacked = filtered.reduce((s, e) => s + e.packedQty, 0);
 
   return (
     <div className="space-y-6">
@@ -60,7 +88,7 @@ export default function FinalStore() {
               <div><Label>Article *</Label>
                 <Select value={form.articleId} onValueChange={v => setForm({ ...form, articleId: v })}>
                   <SelectTrigger><SelectValue placeholder="Select article" /></SelectTrigger>
-                  <SelectContent>{articles.map((a: any) => <SelectItem key={a.id} value={a.id.toString()}>{a.articleCode} - {a.articleName}</SelectItem>)}</SelectContent>
+                  <SelectContent>{articles.map(a => <SelectItem key={a.id} value={a.id.toString()}>{a.articleCode} - {a.articleName}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -86,14 +114,21 @@ export default function FinalStore() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card><CardContent className="pt-6"><div className="text-sm text-muted-foreground flex items-center gap-1"><Package className="h-4 w-4" /> Total Packed in Store</div><div className="text-2xl font-bold">{totalPacked.toLocaleString()} pcs</div></CardContent></Card>
-        <Card><CardContent className="pt-6"><div className="text-sm text-muted-foreground">Total Receipts</div><div className="text-2xl font-bold">{entries.length}</div></CardContent></Card>
+        <Card><CardContent className="pt-6"><div className="text-sm text-muted-foreground">Total Receipts</div><div className="text-2xl font-bold">{filtered.length}</div></CardContent></Card>
       </div>
 
       <Card>
         <CardContent className="pt-6">
+          <div className="flex flex-col sm:flex-row gap-3 mb-6">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Search by article, receiver..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
+            </div>
+          </div>
+
           {loading ? (
             <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full" />)}</div>
-          ) : !entries.length ? (
+          ) : !filtered.length ? (
             <div className="text-center py-12 text-muted-foreground"><Package className="h-12 w-12 mx-auto mb-3 opacity-30" /><p className="text-lg font-medium">No stock in final store</p></div>
           ) : (
             <Table>
@@ -110,7 +145,7 @@ export default function FinalStore() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {entries.map((e) => (
+                {filtered.map((e) => (
                   <TableRow key={e.id}>
                     <TableCell>{format(new Date(e.date), "MMM d, yyyy")}</TableCell>
                     <TableCell><div className="font-medium">{e.articleName}</div><div className="text-xs text-muted-foreground">{e.articleCode}</div></TableCell>

@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { format } from "date-fns";
 import { Link } from "wouter";
+import { ImageUpload } from "@/components/ImageUpload";
 
 interface SizeRow {
   size: string;
@@ -448,6 +449,13 @@ export default function CuttingDetail() {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader><CardTitle>Images</CardTitle></CardHeader>
+        <CardContent>
+          <ImageUpload entityType="cutting_job" entityId={job.id} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

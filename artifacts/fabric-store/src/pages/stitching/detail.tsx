@@ -13,16 +13,52 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, CheckCircle, Trash2, ArrowRightLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
+import { ImageUpload } from "@/components/ImageUpload";
 import { format } from "date-fns";
+
+interface Assignment {
+  id: number;
+  masterId: number;
+  masterName: string;
+  machineNo: string | null;
+  componentName: string;
+  size: string | null;
+  quantityGiven: number;
+  piecesCompleted: number | null;
+  piecesWaste: number | null;
+  wasteReason: string | null;
+  ratePerPiece: number;
+  totalAmount: number | null;
+  status: string;
+}
+
+interface StitchingJobDetail {
+  id: number;
+  articleId: number;
+  articleName: string;
+  articleCode: string;
+  supervisorName: string;
+  jobDate: string;
+  status: string;
+  notes: string | null;
+  assignments: Assignment[];
+}
+
+interface MasterOption {
+  id: number;
+  name: string;
+  machineNo: string | null;
+  masterType: string;
+}
 
 export default function StitchingDetail() {
   const { id } = useParams<{ id: string }>();
-  const [job, setJob] = useState<any>(null);
-  const [masters, setMasters] = useState<any[]>([]);
+  const [job, setJob] = useState<StitchingJobDetail | null>(null);
+  const [masters, setMasters] = useState<MasterOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [assignDialog, setAssignDialog] = useState(false);
-  const [completeDialog, setCompleteDialog] = useState<any>(null);
-  const [transferDialog, setTransferDialog] = useState<any>(null);
+  const [completeDialog, setCompleteDialog] = useState<number | null>(null);
+  const [transferDialog, setTransferDialog] = useState<number | null>(null);
   const { toast } = useToast();
 
   const [assignForm, setAssignForm] = useState({ masterId: "", componentName: "", size: "", quantityGiven: "", ratePerPiece: "", notes: "" });
@@ -31,11 +67,14 @@ export default function StitchingDetail() {
 
   const fetchJob = async () => {
     setLoading(true);
-    try { const data = await apiGet(`/stitching/jobs/${id}`); setJob(data); } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    try { const data = await apiGet<StitchingJobDetail>(`/stitching/jobs/${id}`); setJob(data); } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to load";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
     setLoading(false);
   };
 
-  const fetchMasters = async () => { try { const data = await apiGet("/masters?type=stitching&active=true"); setMasters(data); } catch {} };
+  const fetchMasters = async () => { try { const data = await apiGet<MasterOption[]>("/masters?type=stitching&active=true"); setMasters(data); } catch {} };
 
   useEffect(() => { fetchJob(); fetchMasters(); }, [id]);
 
@@ -50,7 +89,10 @@ export default function StitchingDetail() {
       setAssignDialog(false);
       setAssignForm({ masterId: "", componentName: "", size: "", quantityGiven: "", ratePerPiece: "", notes: "" });
       fetchJob();
-    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to assign";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
   };
 
   const handleComplete = async (assignmentId: number) => {
@@ -64,7 +106,10 @@ export default function StitchingDetail() {
       setCompleteDialog(null);
       setCompleteForm({ piecesCompleted: "", piecesWaste: "", wasteReason: "" });
       fetchJob();
-    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to complete";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
   };
 
   const handleTransfer = async (assignmentId: number) => {
@@ -77,15 +122,26 @@ export default function StitchingDetail() {
       setTransferDialog(null);
       setTransferForm({ newMasterId: "", quantityToTransfer: "" });
       fetchJob();
-    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to transfer";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
   };
 
   const handleUpdateStatus = async (status: string) => {
-    try { await apiPatch(`/stitching/jobs/${id}`, { status }); fetchJob(); } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    try { await apiPatch(`/stitching/jobs/${id}`, { status }); fetchJob(); } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to update";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
   };
 
   if (loading) return <div className="space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-64 w-full" /></div>;
   if (!job) return <div className="text-center py-12 text-muted-foreground">Job not found</div>;
+
+  const totalGiven = job.assignments.reduce((s, a) => s + a.quantityGiven, 0);
+  const totalDone = job.assignments.reduce((s, a) => s + (a.piecesCompleted || 0), 0);
+  const totalWaste = job.assignments.reduce((s, a) => s + (a.piecesWaste || 0), 0);
+  const totalAmount = job.assignments.reduce((s, a) => s + (a.totalAmount || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -101,10 +157,11 @@ export default function StitchingDetail() {
         </Select>
       } />
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card><CardContent className="pt-6"><div className="text-sm text-muted-foreground">Job Date</div><div className="text-lg font-medium">{format(new Date(job.jobDate), "MMM d, yyyy")}</div></CardContent></Card>
-        <Card><CardContent className="pt-6"><div className="text-sm text-muted-foreground">Status</div><Badge className="mt-1">{job.status.replace("_", " ")}</Badge></CardContent></Card>
-        <Card><CardContent className="pt-6"><div className="text-sm text-muted-foreground">Assignments</div><div className="text-lg font-medium">{job.assignments?.length || 0}</div></CardContent></Card>
+        <Card><CardContent className="pt-6"><div className="text-sm text-muted-foreground">Given / Done</div><div className="text-lg font-medium">{totalDone} / {totalGiven} pcs</div></CardContent></Card>
+        <Card><CardContent className="pt-6"><div className="text-sm text-muted-foreground">Waste</div><div className="text-lg font-medium text-orange-600">{totalWaste} pcs</div></CardContent></Card>
+        <Card><CardContent className="pt-6"><div className="text-sm text-muted-foreground">Total Amount</div><div className="text-lg font-medium text-green-700">Rs.{totalAmount.toLocaleString()}</div></CardContent></Card>
       </div>
 
       <Card>
@@ -163,7 +220,7 @@ export default function StitchingDetail() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {job.assignments.map((a: any) => (
+                {job.assignments.map((a) => (
                   <TableRow key={a.id}>
                     <TableCell className="font-medium">{a.masterName}</TableCell>
                     <TableCell>{a.machineNo || "-"}</TableCell>
@@ -214,9 +271,25 @@ export default function StitchingDetail() {
                     </TableCell>
                   </TableRow>
                 ))}
+                <TableRow className="bg-muted/50 font-bold">
+                  <TableCell colSpan={4}>Total</TableCell>
+                  <TableCell>{totalGiven}</TableCell>
+                  <TableCell>{totalDone}</TableCell>
+                  <TableCell className="text-orange-600">{totalWaste}</TableCell>
+                  <TableCell></TableCell>
+                  <TableCell className="font-mono text-green-700">Rs.{totalAmount.toLocaleString()}</TableCell>
+                  <TableCell colSpan={2}></TableCell>
+                </TableRow>
               </TableBody>
             </Table>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Images</CardTitle></CardHeader>
+        <CardContent>
+          <ImageUpload entityType="stitching_job" entityId={job.id} />
         </CardContent>
       </Card>
     </div>

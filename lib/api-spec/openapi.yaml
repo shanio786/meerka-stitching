@@ -14,14 +14,28 @@ tags:
     description: Article master management
   - name: components
     description: Article component management
-  - name: templates
-    description: Component template management
-  - name: grn
-    description: Goods Receipt Note / Stock entries
-  - name: inventory
-    description: Inventory and stock queries
+  - name: accessories
+    description: Article accessory management
+  - name: masters
+    description: Master registry management
+  - name: cutting
+    description: Cutting job management
+  - name: stitching
+    description: Stitching job management
+  - name: qc
+    description: Quality control entries
+  - name: overlock-button
+    description: Overlock and button work
+  - name: finishing
+    description: Finishing entries
+  - name: final-store
+    description: Final store receipts
+  - name: accounts
+    description: Master accounts and ledger
   - name: dashboard
     description: Dashboard summaries
+  - name: images
+    description: Image upload and management
 paths:
   /healthz:
     get:
@@ -47,11 +61,7 @@ paths:
           in: query
           schema:
             type: string
-        - name: fabricType
-          in: query
-          schema:
-            type: string
-        - name: season
+        - name: partType
           in: query
           schema:
             type: string
@@ -613,18 +623,20 @@ components:
           type: string
         collectionName:
           type: ["string", "null"]
-        brandCustomer:
-          type: ["string", "null"]
-        fabricType:
-          type: string
-        season:
+        partType:
           type: string
         category:
           type: string
+        piecesType:
+          type: string
         isActive:
           type: boolean
-        totalFabricPerUnit:
-          type: ["number", "null"]
+        componentCount:
+          type: integer
+        totalMetersReceived:
+          type: number
+        accessoryCount:
+          type: integer
         createdAt:
           type: string
           format: date-time
@@ -635,9 +647,9 @@ components:
         - id
         - articleCode
         - articleName
-        - fabricType
-        - season
+        - partType
         - category
+        - piecesType
         - isActive
         - createdAt
         - updatedAt
@@ -651,20 +663,18 @@ components:
           type: string
         collectionName:
           type: ["string", "null"]
-        brandCustomer:
-          type: ["string", "null"]
-        fabricType:
-          type: string
-        season:
+        partType:
           type: string
         category:
+          type: string
+        piecesType:
           type: string
       required:
         - articleCode
         - articleName
-        - fabricType
-        - season
+        - partType
         - category
+        - piecesType
 
     UpdateArticleBody:
       type: object
@@ -675,13 +685,11 @@ components:
           type: string
         collectionName:
           type: ["string", "null"]
-        brandCustomer:
-          type: ["string", "null"]
-        fabricType:
-          type: string
-        season:
+        partType:
           type: string
         category:
+          type: string
+        piecesType:
           type: string
 
     ArticleComponent:
@@ -693,20 +701,10 @@ components:
           type: integer
         componentName:
           type: string
-        componentType:
+        fabricName:
           type: string
-        fabricType:
-          type: ["string", "null"]
-        color:
-          type: ["string", "null"]
-        designPrint:
-          type: ["string", "null"]
-        requiredMeters:
+        totalMetersReceived:
           type: number
-        unitType:
-          type: string
-        wastagePercent:
-          type: ["number", "null"]
         createdAt:
           type: string
           format: date-time
@@ -714,9 +712,8 @@ components:
         - id
         - articleId
         - componentName
-        - componentType
-        - requiredMeters
-        - unitType
+        - fabricName
+        - totalMetersReceived
         - createdAt
 
     ArticleWithComponents:
@@ -730,18 +727,14 @@ components:
           type: string
         collectionName:
           type: ["string", "null"]
-        brandCustomer:
-          type: ["string", "null"]
-        fabricType:
-          type: string
-        season:
+        partType:
           type: string
         category:
           type: string
+        piecesType:
+          type: string
         isActive:
           type: boolean
-        totalFabricPerUnit:
-          type: ["number", "null"]
         createdAt:
           type: string
           format: date-time
@@ -752,335 +745,59 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ArticleComponent"
+        accessories:
+          type: array
+          items:
+            $ref: "#/components/schemas/Accessory"
       required:
         - id
         - articleCode
         - articleName
-        - fabricType
-        - season
+        - partType
         - category
+        - piecesType
         - isActive
         - createdAt
         - updatedAt
         - components
+        - accessories
+
+    Accessory:
+      type: object
+      properties:
+        id:
+          type: integer
+        articleId:
+          type: integer
+        accessoryName:
+          type: string
+        quantity:
+          type: number
+        meters:
+          type: ["number", "null"]
+        ratePerUnit:
+          type: ["number", "null"]
+        totalAmount:
+          type: ["number", "null"]
+      required:
+        - id
+        - articleId
+        - accessoryName
+        - quantity
 
     CreateComponentBody:
       type: object
       properties:
         componentName:
           type: string
-        componentType:
-          type: string
-        fabricType:
-          type: ["string", "null"]
-        color:
-          type: ["string", "null"]
-        designPrint:
-          type: ["string", "null"]
-        requiredMeters:
-          type: number
-        unitType:
-          type: string
-        wastagePercent:
-          type: ["number", "null"]
-      required:
-        - componentName
-        - componentType
-        - requiredMeters
-        - unitType
-
-    UpdateComponentBody:
-      type: object
-      properties:
-        componentName:
-          type: string
-        componentType:
-          type: string
-        fabricType:
-          type: ["string", "null"]
-        color:
-          type: ["string", "null"]
-        designPrint:
-          type: ["string", "null"]
-        requiredMeters:
-          type: number
-        unitType:
-          type: string
-        wastagePercent:
-          type: ["number", "null"]
-
-    BulkComponentsBody:
-      type: object
-      properties:
-        components:
-          type: array
-          items:
-            $ref: "#/components/schemas/CreateComponentBody"
-      required:
-        - components
-
-    ComponentTemplate:
-      type: object
-      properties:
-        id:
-          type: integer
-        templateName:
-          type: string
-        description:
-          type: ["string", "null"]
-        createdAt:
-          type: string
-          format: date-time
-      required:
-        - id
-        - templateName
-        - createdAt
-
-    ComponentTemplateWithItems:
-      type: object
-      properties:
-        id:
-          type: integer
-        templateName:
-          type: string
-        description:
-          type: ["string", "null"]
-        createdAt:
-          type: string
-          format: date-time
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/TemplateItem"
-      required:
-        - id
-        - templateName
-        - createdAt
-        - items
-
-    TemplateItem:
-      type: object
-      properties:
-        id:
-          type: integer
-        componentName:
-          type: string
-        componentType:
-          type: string
-        fabricType:
-          type: ["string", "null"]
-        requiredMeters:
-          type: number
-        unitType:
-          type: string
-        wastagePercent:
-          type: ["number", "null"]
-      required:
-        - id
-        - componentName
-        - componentType
-        - requiredMeters
-        - unitType
-
-    CreateTemplateBody:
-      type: object
-      properties:
-        templateName:
-          type: string
-        description:
-          type: ["string", "null"]
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/CreateTemplateItemBody"
-      required:
-        - templateName
-        - items
-
-    CreateTemplateItemBody:
-      type: object
-      properties:
-        componentName:
-          type: string
-        componentType:
-          type: string
-        fabricType:
-          type: ["string", "null"]
-        requiredMeters:
-          type: number
-        unitType:
-          type: string
-        wastagePercent:
-          type: ["number", "null"]
-      required:
-        - componentName
-        - componentType
-        - requiredMeters
-        - unitType
-
-    GrnEntry:
-      type: object
-      properties:
-        id:
-          type: integer
-        grnNumber:
-          type: string
-        date:
-          type: string
-          format: date-time
-        supplierName:
-          type: string
-        articleId:
-          type: integer
-        articleCode:
-          type: ["string", "null"]
-        articleName:
-          type: ["string", "null"]
-        totalRolls:
-          type: integer
-        totalMeters:
-          type: number
-        ratePerMeter:
-          type: number
-        totalCost:
-          type: number
-        batchNumber:
-          type: ["string", "null"]
-        colorLot:
-          type: ["string", "null"]
-        qualityType:
-          type: ["string", "null"]
-        rackLocation:
-          type: ["string", "null"]
-        createdAt:
-          type: string
-          format: date-time
-      required:
-        - id
-        - grnNumber
-        - date
-        - supplierName
-        - articleId
-        - totalRolls
-        - totalMeters
-        - ratePerMeter
-        - totalCost
-        - createdAt
-
-    CreateGrnBody:
-      type: object
-      properties:
-        grnNumber:
-          type: string
-        date:
-          type: string
-          format: date-time
-        supplierName:
-          type: string
-        articleId:
-          type: integer
-        totalRolls:
-          type: integer
-        totalMeters:
-          type: number
-        ratePerMeter:
-          type: number
-        batchNumber:
-          type: ["string", "null"]
-        colorLot:
-          type: ["string", "null"]
-        qualityType:
-          type: ["string", "null"]
-        rackLocation:
-          type: ["string", "null"]
-      required:
-        - grnNumber
-        - date
-        - supplierName
-        - articleId
-        - totalRolls
-        - totalMeters
-        - ratePerMeter
-
-    InventorySummaryItem:
-      type: object
-      properties:
-        articleId:
-          type: integer
-        articleCode:
-          type: string
-        articleName:
-          type: string
-        fabricType:
+        fabricName:
           type: string
         totalMetersReceived:
           type: number
-        totalRolls:
-          type: integer
-        totalCost:
-          type: number
-        grnCount:
-          type: integer
       required:
-        - articleId
-        - articleCode
-        - articleName
-        - fabricType
+        - componentName
+        - fabricName
         - totalMetersReceived
-        - totalRolls
-        - totalCost
-        - grnCount
-
-    LowStockAlert:
-      type: object
-      properties:
-        articleId:
-          type: integer
-        articleCode:
-          type: string
-        articleName:
-          type: string
-        totalMetersReceived:
-          type: number
-        threshold:
-          type: number
-      required:
-        - articleId
-        - articleCode
-        - articleName
-        - totalMetersReceived
-        - threshold
-
-    ArticleStockDetail:
-      type: object
-      properties:
-        articleId:
-          type: integer
-        articleCode:
-          type: string
-        articleName:
-          type: string
-        fabricType:
-          type: string
-        totalMetersReceived:
-          type: number
-        totalRolls:
-          type: integer
-        totalCost:
-          type: number
-        grnEntries:
-          type: array
-          items:
-            $ref: "#/components/schemas/GrnEntry"
-      required:
-        - articleId
-        - articleCode
-        - articleName
-        - fabricType
-        - totalMetersReceived
-        - totalRolls
-        - totalCost
-        - grnEntries
 
     DashboardSummary:
       type: object
@@ -1091,13 +808,7 @@ components:
           type: integer
         totalFabricMeters:
           type: number
-        totalGrnEntries:
-          type: integer
-        totalStockValue:
-          type: number
-        lowStockCount:
-          type: integer
-        recentGrnCount:
+        totalComponents:
           type: integer
         topCategories:
           type: array
@@ -1107,10 +818,7 @@ components:
         - totalArticles
         - activeArticles
         - totalFabricMeters
-        - totalGrnEntries
-        - totalStockValue
-        - lowStockCount
-        - recentGrnCount
+        - totalComponents
         - topCategories
 
     CategoryCount:
@@ -1136,27 +844,11 @@ components:
         timestamp:
           type: string
           format: date-time
-        metadata:
-          type: object
       required:
         - id
         - type
         - description
         - timestamp
-
-    FabricByTypeItem:
-      type: object
-      properties:
-        fabricType:
-          type: string
-        totalMeters:
-          type: number
-        articleCount:
-          type: integer
-      required:
-        - fabricType
-        - totalMeters
-        - articleCount
 
     RequestUploadUrlBody:
       type: object

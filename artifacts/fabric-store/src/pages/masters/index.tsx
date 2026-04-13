@@ -9,19 +9,31 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Plus, Edit, Trash2, Power, Phone, MapPin } from "lucide-react";
+import { Search, Plus, Edit, Trash2, Power } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 
 const MASTER_TYPES = ["cutting", "stitching", "overlock", "button", "finishing"];
 
+interface Master {
+  id: number;
+  name: string;
+  phone: string | null;
+  address: string | null;
+  masterType: string;
+  machineNo: string | null;
+  defaultRate: number | null;
+  isActive: boolean;
+  notes: string | null;
+}
+
 export default function MastersList() {
-  const [masters, setMasters] = useState<any[]>([]);
+  const [masters, setMasters] = useState<Master[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<any>(null);
+  const [editing, setEditing] = useState<Master | null>(null);
   const { toast } = useToast();
 
   const [form, setForm] = useState({ name: "", phone: "", address: "", masterType: "cutting", machineNo: "", defaultRate: "", notes: "" });
@@ -33,9 +45,12 @@ export default function MastersList() {
       if (search) params.set("search", search);
       if (typeFilter !== "all") params.set("type", typeFilter);
       params.set("active", "true");
-      const data = await apiGet(`/masters?${params}`);
+      const data = await apiGet<Master[]>(`/masters?${params}`);
       setMasters(data);
-    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to load";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
     setLoading(false);
   };
 
@@ -55,10 +70,13 @@ export default function MastersList() {
       setEditing(null);
       setForm({ name: "", phone: "", address: "", masterType: "cutting", machineNo: "", defaultRate: "", notes: "" });
       fetchMasters();
-    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to save";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
   };
 
-  const handleEdit = (master: any) => {
+  const handleEdit = (master: Master) => {
     setEditing(master);
     setForm({ name: master.name, phone: master.phone || "", address: master.address || "", masterType: master.masterType, machineNo: master.machineNo || "", defaultRate: master.defaultRate?.toString() || "", notes: master.notes || "" });
     setDialogOpen(true);
@@ -70,14 +88,20 @@ export default function MastersList() {
       await apiDelete(`/masters/${id}`);
       toast({ title: "Master deleted" });
       fetchMasters();
-    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to delete";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
   };
 
-  const handleToggle = async (master: any) => {
+  const handleToggle = async (master: Master) => {
     try {
       await apiPatch(`/masters/${master.id}`, { isActive: !master.isActive });
       fetchMasters();
-    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to update";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
   };
 
   return (

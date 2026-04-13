@@ -9,21 +9,45 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, CheckCircle, Trash2 } from "lucide-react";
+import { Plus, CheckCircle, Trash2, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { format } from "date-fns";
 
+interface OBEntry {
+  id: number;
+  articleId: number;
+  articleName: string;
+  articleCode: string;
+  taskType: string;
+  masterId: number;
+  masterName: string;
+  componentName: string | null;
+  size: string | null;
+  receivedQty: number;
+  completedQty: number | null;
+  wasteQty: number | null;
+  wasteReason: string | null;
+  ratePerPiece: number | null;
+  totalAmount: number | null;
+  receivedBy: string | null;
+  status: string;
+  date: string;
+}
+
+interface ArticleOption { id: number; articleCode: string; articleName: string; }
+interface MasterOption { id: number; name: string; masterType: string; }
+
 export default function OverlockButton() {
-  const [entries, setEntries] = useState<any[]>([]);
-  const [articles, setArticles] = useState<any[]>([]);
-  const [masters, setMasters] = useState<any[]>([]);
+  const [entries, setEntries] = useState<OBEntry[]>([]);
+  const [articles, setArticles] = useState<ArticleOption[]>([]);
+  const [masters, setMasters] = useState<MasterOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [taskType, setTaskType] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [completeDialog, setCompleteDialog] = useState<any>(null);
+  const [completeDialog, setCompleteDialog] = useState<number | null>(null);
   const { toast } = useToast();
 
   const [form, setForm] = useState({ articleId: "", taskType: "overlock", masterId: "", componentName: "", size: "", receivedQty: "", ratePerPiece: "", receivedBy: "", notes: "", date: new Date().toISOString().split("T")[0] });
@@ -34,14 +58,17 @@ export default function OverlockButton() {
     const params = new URLSearchParams();
     if (taskType !== "all") params.set("taskType", taskType);
     if (statusFilter !== "all") params.set("status", statusFilter);
-    try { const data = await apiGet(`/overlock-button?${params}`); setEntries(data); } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    try { const data = await apiGet<OBEntry[]>(`/overlock-button?${params}`); setEntries(data); } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to load";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
     setLoading(false);
   };
 
   useEffect(() => {
     fetchEntries();
-    apiGet("/articles").then(setArticles).catch(() => {});
-    apiGet("/masters?active=true").then(setMasters).catch(() => {});
+    apiGet<ArticleOption[]>("/articles").then(setArticles).catch(() => {});
+    apiGet<MasterOption[]>("/masters?active=true").then(setMasters).catch(() => {});
   }, [taskType, statusFilter]);
 
   const handleCreate = async () => {
@@ -57,7 +84,10 @@ export default function OverlockButton() {
       setDialogOpen(false);
       setForm({ articleId: "", taskType: "overlock", masterId: "", componentName: "", size: "", receivedQty: "", ratePerPiece: "", receivedBy: "", notes: "", date: new Date().toISOString().split("T")[0] });
       fetchEntries();
-    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to create";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
   };
 
   const handleComplete = async (entryId: number) => {
@@ -71,8 +101,17 @@ export default function OverlockButton() {
       setCompleteDialog(null);
       setCompleteForm({ completedQty: "", wasteQty: "", wasteReason: "" });
       fetchEntries();
-    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to complete";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
   };
+
+  const filtered = entries.filter(e => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return e.articleName.toLowerCase().includes(q) || e.masterName.toLowerCase().includes(q);
+  });
 
   return (
     <div className="space-y-6">
@@ -91,7 +130,7 @@ export default function OverlockButton() {
               <div><Label>Article *</Label>
                 <Select value={form.articleId} onValueChange={v => setForm({ ...form, articleId: v })}>
                   <SelectTrigger><SelectValue placeholder="Select article" /></SelectTrigger>
-                  <SelectContent>{articles.map((a: any) => <SelectItem key={a.id} value={a.id.toString()}>{a.articleCode} - {a.articleName}</SelectItem>)}</SelectContent>
+                  <SelectContent>{articles.map(a => <SelectItem key={a.id} value={a.id.toString()}>{a.articleCode} - {a.articleName}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div><Label>Master *</Label>
@@ -120,7 +159,11 @@ export default function OverlockButton() {
 
       <Card>
         <CardContent className="pt-6">
-          <div className="flex gap-3 mb-6">
+          <div className="flex flex-col sm:flex-row gap-3 mb-6">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Search by article, master..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
+            </div>
             <Select value={taskType} onValueChange={setTaskType}>
               <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="all">All Tasks</SelectItem><SelectItem value="overlock">Overlock</SelectItem><SelectItem value="button">Button</SelectItem></SelectContent>
@@ -133,7 +176,7 @@ export default function OverlockButton() {
 
           {loading ? (
             <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full" />)}</div>
-          ) : !entries.length ? (
+          ) : !filtered.length ? (
             <div className="text-center py-12 text-muted-foreground"><p className="text-lg font-medium">No entries</p></div>
           ) : (
             <div className="overflow-x-auto">
@@ -155,7 +198,7 @@ export default function OverlockButton() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {entries.map((e) => (
+                  {filtered.map((e) => (
                     <TableRow key={e.id}>
                       <TableCell>{format(new Date(e.date), "MMM d")}</TableCell>
                       <TableCell><Badge variant="outline">{e.taskType}</Badge></TableCell>
