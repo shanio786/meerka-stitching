@@ -26,6 +26,7 @@ export const cuttingAssignmentsTable = pgTable("cutting_assignments", {
   componentName: text("component_name").notNull(),
   fabricType: text("fabric_type"),
   fabricGivenMeters: doublePrecision("fabric_given_meters").notNull(),
+  fabricPerPiece: doublePrecision("fabric_per_piece"),
   estimatedPieces: integer("estimated_pieces"),
   ratePerPiece: doublePrecision("rate_per_piece"),
   ratePerSuit: doublePrecision("rate_per_suit"),

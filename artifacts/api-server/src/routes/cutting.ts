@@ -70,6 +70,7 @@ router.get("/cutting/jobs/:id", async (req, res): Promise<void> => {
       componentName: cuttingAssignmentsTable.componentName,
       fabricType: cuttingAssignmentsTable.fabricType,
       fabricGivenMeters: cuttingAssignmentsTable.fabricGivenMeters,
+      fabricPerPiece: cuttingAssignmentsTable.fabricPerPiece,
       estimatedPieces: cuttingAssignmentsTable.estimatedPieces,
       ratePerPiece: cuttingAssignmentsTable.ratePerPiece,
       ratePerSuit: cuttingAssignmentsTable.ratePerSuit,
@@ -108,7 +109,7 @@ router.patch("/cutting/jobs/:id", async (req, res): Promise<void> => {
 });
 
 router.post("/cutting/assignments", async (req, res): Promise<void> => {
-  const { jobId, masterId, componentName, fabricType, fabricGivenMeters, estimatedPieces, ratePerPiece, ratePerSuit, notes, sizes } = req.body;
+  const { jobId, masterId, componentName, fabricType, fabricGivenMeters, fabricPerPiece, estimatedPieces, ratePerPiece, ratePerSuit, notes, sizes } = req.body;
   if (!jobId || !masterId || !componentName || !fabricGivenMeters) {
     res.status(400).json({ error: "Missing required fields" });
     return;
@@ -116,7 +117,7 @@ router.post("/cutting/assignments", async (req, res): Promise<void> => {
 
   const result = await db.transaction(async (tx) => {
     const [assignment] = await tx.insert(cuttingAssignmentsTable).values({
-      jobId, masterId, componentName, fabricType, fabricGivenMeters, estimatedPieces, ratePerPiece, ratePerSuit, notes,
+      jobId, masterId, componentName, fabricType, fabricGivenMeters, fabricPerPiece, estimatedPieces, ratePerPiece, ratePerSuit, notes,
     }).returning();
 
     if (sizes && Array.isArray(sizes)) {
