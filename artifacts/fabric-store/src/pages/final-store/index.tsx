@@ -2,16 +2,17 @@ import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Trash2, Package, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, apiDelete } from "@/lib/api";
 import { format } from "date-fns";
+import { SearchableSelect } from "@/components/SearchableSelect";
 
 interface StoreEntry {
   id: number;
@@ -76,6 +77,7 @@ export default function FinalStore() {
   });
 
   const totalPacked = filtered.reduce((s, e) => s + e.packedQty, 0);
+  const articleOptions = articles.map(a => ({ value: a.id.toString(), label: `${a.articleCode} - ${a.articleName}`, sublabel: a.articleCode }));
 
   return (
     <div className="space-y-6">
@@ -86,10 +88,7 @@ export default function FinalStore() {
             <DialogHeader><DialogTitle>Receive in Final Store</DialogTitle></DialogHeader>
             <div className="space-y-4">
               <div><Label>Article *</Label>
-                <Select value={form.articleId} onValueChange={v => setForm({ ...form, articleId: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select article" /></SelectTrigger>
-                  <SelectContent>{articles.map(a => <SelectItem key={a.id} value={a.id.toString()}>{a.articleCode} - {a.articleName}</SelectItem>)}</SelectContent>
-                </Select>
+                <SearchableSelect options={articleOptions} value={form.articleId} onValueChange={v => setForm({ ...form, articleId: v })} placeholder="Search & select article" searchPlaceholder="Type article name or code..." />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Received By *</Label><Input value={form.receivedBy} onChange={e => setForm({ ...form, receivedBy: e.target.value })} /></div>

@@ -1,0 +1,75 @@
+Let me start with T001. First, let me read the current files I need to modify:
+
+
+3 actions
+Good. Now let me read the key pages I need to modify. Let me batch reads:
+
+
+2 actions
+Good, I now have a thorough understanding. This is a big set of changes. Let me implement systematically, starting with the most impactful pieces. Let me read the remaining key files I'll need:
+
+
+2 actions
+Now let me read the remaining pages I need to update and the dashboard/layout files:
+
+
+2 actions
+Now I have all the context I need. This is a massive set of changes. Let me read the remaining production pages quickly and then start implementing everything:
+
+
+4 actions
+Now I have full context. Let me start implementing everything. I'll work in parallel where possible.
+
+Step 1: Create SearchableSelect component + Fix Part Type naming + Add custom options DB + Add footer
+
+
+Ran ls
+Good, command and popover components exist. Now let me create the SearchableSelect component and update the custom_options schema + add all the backend routes:
+
+
+Created artifacts/fabric-store/src/components/SearchableSelect.tsx
+Now let me create the custom_options schema, add it to the DB, create the backend route, and then update all the frontend pages. I'll work through these systematically:
+
+
+3 actions
+Now let me create the custom-options backend route:
+
+
+Created artifacts/api-server/src/routes/custom-options.ts
+Now register the route in the routes index:
+
+
+2 actions
+Now let me update the Article form with CMD fix, custom options support, and searchable collection:
+
+
+Edited artifacts/fabric-store/src/pages/articles/form.tsx
+Now let me update the articles list to also include collection filter and fix the category filter to include custom options:
+
+
+Edited artifacts/fabric-store/src/pages/articles/index.tsx
+Now let me update the cutting page to use SearchableSelect for article selection, then do stitching, QC, overlock, finishing, and final-store:
+
+
+Edited artifacts/fabric-store/src/pages/cutting/index.tsx
+Now update stitching index with SearchableSelect:
+
+
+Edited artifacts/fabric-store/src/pages/stitching/index.tsx
+Now let me update the remaining production pages (QC, Overlock, Finishing, Final Store) to use SearchableSelect. I'll also update the QC and Overlock pages to use searchable master selects. Let me read the full files and rewrite them:
+
+
+3 actions
+I'll continue working through the session plan. Let me update the remaining production pages with SearchableSelect, then tackle reports, dashboard, and footer branding. Let me read the files I need first:
+
+
+5 actions
+Now let me update all four remaining production pages with SearchableSelect, plus read the dashboard, reports, and AppLayout for the next round:
+
+
+4 actions
+T001 and T002 are done. Now let me tackle T003 (Enhanced Reports) and T004 (Dashboard + Branding + Footer). Let me read the current reports and dashboard pages, plus the AppLayout:
+
+
+4 actions
+Now let me update all three files - enhanced reports, improved dashboard, and AppLayout with footer branding:

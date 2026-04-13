@@ -13,6 +13,7 @@ import { Plus, CheckCircle, Trash2, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { format } from "date-fns";
+import { SearchableSelect } from "@/components/SearchableSelect";
 
 interface OBEntry {
   id: number;
@@ -110,8 +111,11 @@ export default function OverlockButton() {
   const filtered = entries.filter(e => {
     if (!search) return true;
     const q = search.toLowerCase();
-    return e.articleName.toLowerCase().includes(q) || e.masterName.toLowerCase().includes(q);
+    return e.articleName.toLowerCase().includes(q) || e.masterName.toLowerCase().includes(q) || e.articleCode.toLowerCase().includes(q);
   });
+
+  const articleOptions = articles.map(a => ({ value: a.id.toString(), label: `${a.articleCode} - ${a.articleName}`, sublabel: a.articleCode }));
+  const masterOptions = masters.filter(m => m.masterType === "overlock" || m.masterType === "button").map(m => ({ value: m.id.toString(), label: `${m.name} (${m.masterType})` }));
 
   return (
     <div className="space-y-6">
@@ -128,16 +132,10 @@ export default function OverlockButton() {
                 </Select>
               </div>
               <div><Label>Article *</Label>
-                <Select value={form.articleId} onValueChange={v => setForm({ ...form, articleId: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select article" /></SelectTrigger>
-                  <SelectContent>{articles.map(a => <SelectItem key={a.id} value={a.id.toString()}>{a.articleCode} - {a.articleName}</SelectItem>)}</SelectContent>
-                </Select>
+                <SearchableSelect options={articleOptions} value={form.articleId} onValueChange={v => setForm({ ...form, articleId: v })} placeholder="Search & select article" searchPlaceholder="Type article name or code..." />
               </div>
               <div><Label>Master *</Label>
-                <Select value={form.masterId} onValueChange={v => setForm({ ...form, masterId: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select master" /></SelectTrigger>
-                  <SelectContent>{masters.filter(m => m.masterType === "overlock" || m.masterType === "button").map(m => <SelectItem key={m.id} value={m.id.toString()}>{m.name} ({m.masterType})</SelectItem>)}</SelectContent>
-                </Select>
+                <SearchableSelect options={masterOptions} value={form.masterId} onValueChange={v => setForm({ ...form, masterId: v })} placeholder="Search & select master" searchPlaceholder="Search master..." />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Received Qty *</Label><Input type="number" value={form.receivedQty} onChange={e => setForm({ ...form, receivedQty: e.target.value })} /></div>
@@ -149,6 +147,7 @@ export default function OverlockButton() {
                   <SelectContent>{["XS", "S", "M", "L", "XL", "XXL"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
+              <div><Label>Received By</Label><Input value={form.receivedBy} onChange={e => setForm({ ...form, receivedBy: e.target.value })} placeholder="Person who received pieces" /></div>
               <div><Label>Date *</Label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
               <div><Label>Notes</Label><Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
               <Button className="w-full" onClick={handleCreate}>Add Entry</Button>
@@ -202,7 +201,7 @@ export default function OverlockButton() {
                     <TableRow key={e.id}>
                       <TableCell>{format(new Date(e.date), "MMM d")}</TableCell>
                       <TableCell><Badge variant="outline">{e.taskType}</Badge></TableCell>
-                      <TableCell><div className="font-medium">{e.articleName}</div></TableCell>
+                      <TableCell><div className="font-medium">{e.articleName}</div><div className="text-xs text-muted-foreground">{e.articleCode}</div></TableCell>
                       <TableCell>{e.masterName}</TableCell>
                       <TableCell>{e.size || "-"}</TableCell>
                       <TableCell className="text-center">{e.receivedQty}</TableCell>

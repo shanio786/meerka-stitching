@@ -13,6 +13,7 @@ import { Plus, Trash2, CheckCircle, XCircle, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, apiDelete } from "@/lib/api";
 import { format } from "date-fns";
+import { SearchableSelect } from "@/components/SearchableSelect";
 
 interface QCEntry {
   id: number;
@@ -89,6 +90,9 @@ export default function QCEntries() {
     return e.articleName.toLowerCase().includes(q) || e.articleCode.toLowerCase().includes(q) || e.inspectorName.toLowerCase().includes(q) || (e.masterName || "").toLowerCase().includes(q);
   });
 
+  const articleOptions = articles.map(a => ({ value: a.id.toString(), label: `${a.articleCode} - ${a.articleName}`, sublabel: a.articleCode }));
+  const masterOptions = masters.filter(m => m.masterType === "stitching").map(m => ({ value: m.id.toString(), label: m.name }));
+
   return (
     <div className="space-y-6">
       <PageHeader title="Quality Control" description="Inspect stitched pieces - track passed, rejected, and rejection reasons" actions={
@@ -98,18 +102,12 @@ export default function QCEntries() {
             <DialogHeader><DialogTitle>Add QC Entry</DialogTitle></DialogHeader>
             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
               <div><Label>Article *</Label>
-                <Select value={form.articleId} onValueChange={v => setForm({ ...form, articleId: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select article" /></SelectTrigger>
-                  <SelectContent>{articles.map(a => <SelectItem key={a.id} value={a.id.toString()}>{a.articleCode} - {a.articleName}</SelectItem>)}</SelectContent>
-                </Select>
+                <SearchableSelect options={articleOptions} value={form.articleId} onValueChange={v => setForm({ ...form, articleId: v })} placeholder="Search & select article" searchPlaceholder="Type article name or code..." />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Inspector Name *</Label><Input value={form.inspectorName} onChange={e => setForm({ ...form, inspectorName: e.target.value })} /></div>
                 <div><Label>Master (stitching)</Label>
-                  <Select value={form.masterId} onValueChange={v => setForm({ ...form, masterId: v })}>
-                    <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
-                    <SelectContent>{masters.filter(m => m.masterType === "stitching").map(m => <SelectItem key={m.id} value={m.id.toString()}>{m.name}</SelectItem>)}</SelectContent>
-                  </Select>
+                  <SearchableSelect options={masterOptions} value={form.masterId} onValueChange={v => setForm({ ...form, masterId: v })} placeholder="Select master" searchPlaceholder="Search master..." />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">

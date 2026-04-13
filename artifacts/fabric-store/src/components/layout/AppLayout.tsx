@@ -109,6 +109,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <ScrollArea className="flex-1">
           <NavLinks />
         </ScrollArea>
+        <div className="px-4 py-3 border-t border-sidebar-border text-center">
+          <div className="text-[11px] font-medium text-sidebar-foreground/60">Powered by</div>
+          <div className="text-xs font-bold text-primary">Devoria Tech</div>
+          <div className="text-[10px] text-sidebar-foreground/50">+923117597815</div>
+        </div>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -130,9 +135,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     Stitching ERP
                   </div>
                 </div>
-                <ScrollArea className="h-[calc(100vh-3.5rem)] bg-sidebar">
+                <ScrollArea className="h-[calc(100vh-3.5rem-4rem)] bg-sidebar">
                   <NavLinks />
                 </ScrollArea>
+                <div className="px-4 py-3 border-t border-sidebar-border bg-sidebar text-center">
+                  <div className="text-[11px] font-medium text-sidebar-foreground/60">Powered by</div>
+                  <div className="text-xs font-bold text-primary">Devoria Tech</div>
+                  <div className="text-[10px] text-sidebar-foreground/50">+923117597815</div>
+                </div>
               </SheetContent>
             </Sheet>
             <div className="font-bold text-base text-primary md:hidden tracking-tight">Stitching ERP</div>

@@ -29,6 +29,7 @@ interface Article {
 export default function ArticlesList() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
+  const [partTypeFilter, setPartTypeFilter] = useState("");
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -58,6 +59,15 @@ export default function ArticlesList() {
     loadArticles();
   };
 
+  const collections = [...new Set(articles.map(a => a.collectionName).filter(Boolean))] as string[];
+  const categories = [...new Set(articles.map(a => a.category))];
+  const partTypes = [...new Set(articles.map(a => a.partType))];
+
+  const filtered = articles.filter(a => {
+    if (partTypeFilter && partTypeFilter !== "all" && a.partType !== partTypeFilter) return false;
+    return true;
+  });
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -72,7 +82,7 @@ export default function ArticlesList() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by name or code..."
+                placeholder="Search by name, code, or collection..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-10"
@@ -84,10 +94,16 @@ export default function ArticlesList() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
-                <SelectItem value="Summer">Summer</SelectItem>
-                <SelectItem value="Winter">Winter</SelectItem>
-                <SelectItem value="Spring">Spring</SelectItem>
-                <SelectItem value="Fall">Fall</SelectItem>
+                {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={partTypeFilter} onValueChange={setPartTypeFilter}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Part Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                {partTypes.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -96,7 +112,7 @@ export default function ArticlesList() {
             <div className="space-y-3">
               {[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full" />)}
             </div>
-          ) : !articles?.length ? (
+          ) : !filtered?.length ? (
             <div className="text-center py-12 text-muted-foreground">
               <p className="text-lg font-medium">No articles found</p>
               <p className="text-sm mt-1">Create your first article to get started</p>
@@ -108,6 +124,7 @@ export default function ArticlesList() {
                   <TableRow>
                     <TableHead>Code</TableHead>
                     <TableHead>Name</TableHead>
+                    <TableHead>Collection</TableHead>
                     <TableHead>Part Type</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead>Pieces</TableHead>
@@ -118,7 +135,7 @@ export default function ArticlesList() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {articles.map((article) => (
+                  {filtered.map((article) => (
                     <TableRow key={article.id}>
                       <TableCell className="font-mono text-sm font-medium">{article.articleCode}</TableCell>
                       <TableCell>
@@ -127,10 +144,8 @@ export default function ArticlesList() {
                             {article.articleName}
                           </span>
                         </Link>
-                        {article.collectionName && (
-                          <span className="block text-xs text-muted-foreground">{article.collectionName}</span>
-                        )}
                       </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{article.collectionName || "-"}</TableCell>
                       <TableCell><Badge variant="outline">{article.partType}</Badge></TableCell>
                       <TableCell>{article.category}</TableCell>
                       <TableCell><Badge variant="secondary">{article.piecesType}</Badge></TableCell>

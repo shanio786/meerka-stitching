@@ -15,6 +15,7 @@ import finishingRouter from "./finishing";
 import finalStoreRouter from "./final-store";
 import accountsRouter from "./accounts";
 import imagesRouter from "./images";
+import customOptionsRouter from "./custom-options";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(finishingRouter);
 router.use(finalStoreRouter);
 router.use(accountsRouter);
 router.use(imagesRouter);
+router.use(customOptionsRouter);
 
 export default router;

@@ -14,6 +14,7 @@ import { Plus, Eye, Scissors, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost } from "@/lib/api";
 import { format } from "date-fns";
+import { SearchableSelect } from "@/components/SearchableSelect";
 
 interface CuttingJob {
   id: number;
@@ -86,6 +87,12 @@ export default function CuttingJobs() {
     return j.articleName.toLowerCase().includes(q) || j.articleCode.toLowerCase().includes(q) || `CUT-${String(j.id).padStart(4, "0")}`.toLowerCase().includes(q);
   });
 
+  const articleOptions = articles.map(a => ({
+    value: a.id.toString(),
+    label: `${a.articleCode} - ${a.articleName}`,
+    sublabel: a.articleCode,
+  }));
+
   return (
     <div className="space-y-6">
       <PageHeader title="Cutting Jobs" description="Manage fabric cutting jobs and master assignments" actions={
@@ -95,10 +102,13 @@ export default function CuttingJobs() {
             <DialogHeader><DialogTitle>Create Cutting Job</DialogTitle></DialogHeader>
             <div className="space-y-4">
               <div><Label>Article *</Label>
-                <Select value={form.articleId} onValueChange={v => setForm({ ...form, articleId: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select article" /></SelectTrigger>
-                  <SelectContent>{articles.map(a => <SelectItem key={a.id} value={a.id.toString()}>{a.articleCode} - {a.articleName}</SelectItem>)}</SelectContent>
-                </Select>
+                <SearchableSelect
+                  options={articleOptions}
+                  value={form.articleId}
+                  onValueChange={v => setForm({ ...form, articleId: v })}
+                  placeholder="Search & select article"
+                  searchPlaceholder="Type article name or code..."
+                />
               </div>
               <div><Label>Job Date *</Label><Input type="date" value={form.jobDate} onChange={e => setForm({ ...form, jobDate: e.target.value })} /></div>
               <div><Label>Notes</Label><Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
