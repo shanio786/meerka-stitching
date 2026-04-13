@@ -3,13 +3,25 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Stitching Production ERP - Fabric Store Module API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: articles
+    description: Article master management
+  - name: components
+    description: Article component management
+  - name: templates
+    description: Component template management
+  - name: grn
+    description: Goods Receipt Note / Stock entries
+  - name: inventory
+    description: Inventory and stock queries
+  - name: dashboard
+    description: Dashboard summaries
 paths:
   /healthz:
     get:
@@ -24,6 +36,554 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /articles:
+    get:
+      operationId: listArticles
+      tags: [articles]
+      summary: List all articles
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: fabricType
+          in: query
+          schema:
+            type: string
+        - name: season
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: collection
+          in: query
+          schema:
+            type: string
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of articles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Article"
+    post:
+      operationId: createArticle
+      tags: [articles]
+      summary: Create a new article
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateArticleBody"
+      responses:
+        "201":
+          description: Created article
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Article"
+        "409":
+          description: Duplicate article code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /articles/{id}:
+    get:
+      operationId: getArticle
+      tags: [articles]
+      summary: Get article by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Article details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArticleWithComponents"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateArticle
+      tags: [articles]
+      summary: Update an article
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateArticleBody"
+      responses:
+        "200":
+          description: Updated article
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Article"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteArticle
+      tags: [articles]
+      summary: Delete an article
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /articles/{id}/toggle-active:
+    patch:
+      operationId: toggleArticleActive
+      tags: [articles]
+      summary: Toggle article active/inactive
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated article
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Article"
+
+  /articles/{articleId}/components:
+    get:
+      operationId: listArticleComponents
+      tags: [components]
+      summary: List components for an article
+      parameters:
+        - name: articleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of components
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ArticleComponent"
+    post:
+      operationId: createArticleComponent
+      tags: [components]
+      summary: Add a component to an article
+      parameters:
+        - name: articleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateComponentBody"
+      responses:
+        "201":
+          description: Created component
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArticleComponent"
+
+  /articles/{articleId}/components/bulk:
+    put:
+      operationId: bulkUpdateComponents
+      tags: [components]
+      summary: Replace all components for an article
+      parameters:
+        - name: articleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkComponentsBody"
+      responses:
+        "200":
+          description: Updated components
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ArticleComponent"
+
+  /components/{id}:
+    patch:
+      operationId: updateComponent
+      tags: [components]
+      summary: Update a component
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateComponentBody"
+      responses:
+        "200":
+          description: Updated component
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArticleComponent"
+    delete:
+      operationId: deleteComponent
+      tags: [components]
+      summary: Delete a component
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /templates:
+    get:
+      operationId: listTemplates
+      tags: [templates]
+      summary: List all component templates
+      responses:
+        "200":
+          description: List of templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ComponentTemplate"
+    post:
+      operationId: createTemplate
+      tags: [templates]
+      summary: Create a component template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTemplateBody"
+      responses:
+        "201":
+          description: Created template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentTemplate"
+
+  /templates/{id}:
+    get:
+      operationId: getTemplate
+      tags: [templates]
+      summary: Get template with items
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Template details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentTemplateWithItems"
+    delete:
+      operationId: deleteTemplate
+      tags: [templates]
+      summary: Delete a template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /templates/{id}/apply/{articleId}:
+    post:
+      operationId: applyTemplate
+      tags: [templates]
+      summary: Apply a template to an article
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: articleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Applied components
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ArticleComponent"
+
+  /grn:
+    get:
+      operationId: listGrnEntries
+      tags: [grn]
+      summary: List GRN entries
+      parameters:
+        - name: articleId
+          in: query
+          schema:
+            type: integer
+        - name: supplier
+          in: query
+          schema:
+            type: string
+        - name: fromDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: toDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: List of GRN entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GrnEntry"
+    post:
+      operationId: createGrnEntry
+      tags: [grn]
+      summary: Create a new GRN entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGrnBody"
+      responses:
+        "201":
+          description: Created GRN entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrnEntry"
+
+  /grn/{id}:
+    get:
+      operationId: getGrnEntry
+      tags: [grn]
+      summary: Get GRN entry by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: GRN entry details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrnEntry"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteGrnEntry
+      tags: [grn]
+      summary: Delete a GRN entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /inventory/summary:
+    get:
+      operationId: getInventorySummary
+      tags: [inventory]
+      summary: Get inventory summary per article
+      responses:
+        "200":
+          description: Inventory summary
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventorySummaryItem"
+
+  /inventory/low-stock:
+    get:
+      operationId: getLowStockAlerts
+      tags: [inventory]
+      summary: Get low stock alerts
+      parameters:
+        - name: threshold
+          in: query
+          schema:
+            type: number
+            default: 50
+      responses:
+        "200":
+          description: Low stock items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LowStockAlert"
+
+  /inventory/article/{articleId}:
+    get:
+      operationId: getArticleStock
+      tags: [inventory]
+      summary: Get stock details for a specific article
+      parameters:
+        - name: articleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Article stock details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArticleStockDetail"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard overview
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/recent-activity:
+    get:
+      operationId: getRecentActivity
+      tags: [dashboard]
+      summary: Get recent activity feed
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
+  /dashboard/fabric-by-type:
+    get:
+      operationId: getFabricByType
+      tags: [dashboard]
+      summary: Get fabric stock grouped by type
+      responses:
+        "200":
+          description: Fabric by type
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FabricByTypeItem"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +594,566 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    Article:
+      type: object
+      properties:
+        id:
+          type: integer
+        articleCode:
+          type: string
+        articleName:
+          type: string
+        collectionName:
+          type: ["string", "null"]
+        brandCustomer:
+          type: ["string", "null"]
+        fabricType:
+          type: string
+        season:
+          type: string
+        category:
+          type: string
+        isActive:
+          type: boolean
+        totalFabricPerUnit:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - articleCode
+        - articleName
+        - fabricType
+        - season
+        - category
+        - isActive
+        - createdAt
+        - updatedAt
+
+    CreateArticleBody:
+      type: object
+      properties:
+        articleCode:
+          type: string
+        articleName:
+          type: string
+        collectionName:
+          type: ["string", "null"]
+        brandCustomer:
+          type: ["string", "null"]
+        fabricType:
+          type: string
+        season:
+          type: string
+        category:
+          type: string
+      required:
+        - articleCode
+        - articleName
+        - fabricType
+        - season
+        - category
+
+    UpdateArticleBody:
+      type: object
+      properties:
+        articleCode:
+          type: string
+        articleName:
+          type: string
+        collectionName:
+          type: ["string", "null"]
+        brandCustomer:
+          type: ["string", "null"]
+        fabricType:
+          type: string
+        season:
+          type: string
+        category:
+          type: string
+
+    ArticleComponent:
+      type: object
+      properties:
+        id:
+          type: integer
+        articleId:
+          type: integer
+        componentName:
+          type: string
+        componentType:
+          type: string
+        fabricType:
+          type: ["string", "null"]
+        color:
+          type: ["string", "null"]
+        designPrint:
+          type: ["string", "null"]
+        requiredMeters:
+          type: number
+        unitType:
+          type: string
+        wastagePercent:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - articleId
+        - componentName
+        - componentType
+        - requiredMeters
+        - unitType
+        - createdAt
+
+    ArticleWithComponents:
+      type: object
+      properties:
+        id:
+          type: integer
+        articleCode:
+          type: string
+        articleName:
+          type: string
+        collectionName:
+          type: ["string", "null"]
+        brandCustomer:
+          type: ["string", "null"]
+        fabricType:
+          type: string
+        season:
+          type: string
+        category:
+          type: string
+        isActive:
+          type: boolean
+        totalFabricPerUnit:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        components:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArticleComponent"
+      required:
+        - id
+        - articleCode
+        - articleName
+        - fabricType
+        - season
+        - category
+        - isActive
+        - createdAt
+        - updatedAt
+        - components
+
+    CreateComponentBody:
+      type: object
+      properties:
+        componentName:
+          type: string
+        componentType:
+          type: string
+        fabricType:
+          type: ["string", "null"]
+        color:
+          type: ["string", "null"]
+        designPrint:
+          type: ["string", "null"]
+        requiredMeters:
+          type: number
+        unitType:
+          type: string
+        wastagePercent:
+          type: ["number", "null"]
+      required:
+        - componentName
+        - componentType
+        - requiredMeters
+        - unitType
+
+    UpdateComponentBody:
+      type: object
+      properties:
+        componentName:
+          type: string
+        componentType:
+          type: string
+        fabricType:
+          type: ["string", "null"]
+        color:
+          type: ["string", "null"]
+        designPrint:
+          type: ["string", "null"]
+        requiredMeters:
+          type: number
+        unitType:
+          type: string
+        wastagePercent:
+          type: ["number", "null"]
+
+    BulkComponentsBody:
+      type: object
+      properties:
+        components:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateComponentBody"
+      required:
+        - components
+
+    ComponentTemplate:
+      type: object
+      properties:
+        id:
+          type: integer
+        templateName:
+          type: string
+        description:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - templateName
+        - createdAt
+
+    ComponentTemplateWithItems:
+      type: object
+      properties:
+        id:
+          type: integer
+        templateName:
+          type: string
+        description:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateItem"
+      required:
+        - id
+        - templateName
+        - createdAt
+        - items
+
+    TemplateItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        componentName:
+          type: string
+        componentType:
+          type: string
+        fabricType:
+          type: ["string", "null"]
+        requiredMeters:
+          type: number
+        unitType:
+          type: string
+        wastagePercent:
+          type: ["number", "null"]
+      required:
+        - id
+        - componentName
+        - componentType
+        - requiredMeters
+        - unitType
+
+    CreateTemplateBody:
+      type: object
+      properties:
+        templateName:
+          type: string
+        description:
+          type: ["string", "null"]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateTemplateItemBody"
+      required:
+        - templateName
+        - items
+
+    CreateTemplateItemBody:
+      type: object
+      properties:
+        componentName:
+          type: string
+        componentType:
+          type: string
+        fabricType:
+          type: ["string", "null"]
+        requiredMeters:
+          type: number
+        unitType:
+          type: string
+        wastagePercent:
+          type: ["number", "null"]
+      required:
+        - componentName
+        - componentType
+        - requiredMeters
+        - unitType
+
+    GrnEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        grnNumber:
+          type: string
+        date:
+          type: string
+          format: date-time
+        supplierName:
+          type: string
+        articleId:
+          type: integer
+        articleCode:
+          type: ["string", "null"]
+        articleName:
+          type: ["string", "null"]
+        totalRolls:
+          type: integer
+        totalMeters:
+          type: number
+        ratePerMeter:
+          type: number
+        totalCost:
+          type: number
+        batchNumber:
+          type: ["string", "null"]
+        colorLot:
+          type: ["string", "null"]
+        qualityType:
+          type: ["string", "null"]
+        rackLocation:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - grnNumber
+        - date
+        - supplierName
+        - articleId
+        - totalRolls
+        - totalMeters
+        - ratePerMeter
+        - totalCost
+        - createdAt
+
+    CreateGrnBody:
+      type: object
+      properties:
+        grnNumber:
+          type: string
+        date:
+          type: string
+          format: date-time
+        supplierName:
+          type: string
+        articleId:
+          type: integer
+        totalRolls:
+          type: integer
+        totalMeters:
+          type: number
+        ratePerMeter:
+          type: number
+        batchNumber:
+          type: ["string", "null"]
+        colorLot:
+          type: ["string", "null"]
+        qualityType:
+          type: ["string", "null"]
+        rackLocation:
+          type: ["string", "null"]
+      required:
+        - grnNumber
+        - date
+        - supplierName
+        - articleId
+        - totalRolls
+        - totalMeters
+        - ratePerMeter
+
+    InventorySummaryItem:
+      type: object
+      properties:
+        articleId:
+          type: integer
+        articleCode:
+          type: string
+        articleName:
+          type: string
+        fabricType:
+          type: string
+        totalMetersReceived:
+          type: number
+        totalRolls:
+          type: integer
+        totalCost:
+          type: number
+        grnCount:
+          type: integer
+      required:
+        - articleId
+        - articleCode
+        - articleName
+        - fabricType
+        - totalMetersReceived
+        - totalRolls
+        - totalCost
+        - grnCount
+
+    LowStockAlert:
+      type: object
+      properties:
+        articleId:
+          type: integer
+        articleCode:
+          type: string
+        articleName:
+          type: string
+        totalMetersReceived:
+          type: number
+        threshold:
+          type: number
+      required:
+        - articleId
+        - articleCode
+        - articleName
+        - totalMetersReceived
+        - threshold
+
+    ArticleStockDetail:
+      type: object
+      properties:
+        articleId:
+          type: integer
+        articleCode:
+          type: string
+        articleName:
+          type: string
+        fabricType:
+          type: string
+        totalMetersReceived:
+          type: number
+        totalRolls:
+          type: integer
+        totalCost:
+          type: number
+        grnEntries:
+          type: array
+          items:
+            $ref: "#/components/schemas/GrnEntry"
+      required:
+        - articleId
+        - articleCode
+        - articleName
+        - fabricType
+        - totalMetersReceived
+        - totalRolls
+        - totalCost
+        - grnEntries
+
+    DashboardSummary:
+      type: object
+      properties:
+        totalArticles:
+          type: integer
+        activeArticles:
+          type: integer
+        totalFabricMeters:
+          type: number
+        totalGrnEntries:
+          type: integer
+        totalStockValue:
+          type: number
+        lowStockCount:
+          type: integer
+        recentGrnCount:
+          type: integer
+        topCategories:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryCount"
+      required:
+        - totalArticles
+        - activeArticles
+        - totalFabricMeters
+        - totalGrnEntries
+        - totalStockValue
+        - lowStockCount
+        - recentGrnCount
+        - topCategories
+
+    CategoryCount:
+      type: object
+      properties:
+        category:
+          type: string
+        count:
+          type: integer
+      required:
+        - category
+        - count
+
+    ActivityItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        description:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+      required:
+        - id
+        - type
+        - description
+        - timestamp
+
+    FabricByTypeItem:
+      type: object
+      properties:
+        fabricType:
+          type: string
+        totalMeters:
+          type: number
+        articleCount:
+          type: integer
+      required:
+        - fabricType
+        - totalMeters
+        - articleCount
