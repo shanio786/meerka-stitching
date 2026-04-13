@@ -32,6 +32,8 @@ export * from "./inventorySummaryItem";
 export * from "./listArticlesParams";
 export * from "./listGrnEntriesParams";
 export * from "./lowStockAlert";
+export * from "./requestUploadUrlBody";
+export * from "./requestUploadUrlResponse";
 export * from "./templateItem";
 export * from "./updateArticleBody";
 export * from "./updateComponentBody";

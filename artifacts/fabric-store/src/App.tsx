@@ -14,6 +14,17 @@ import GrnForm from "@/pages/grn/form";
 import Inventory from "@/pages/inventory";
 import Templates from "@/pages/templates";
 import Reports from "@/pages/reports";
+import MastersList from "@/pages/masters/index";
+import CuttingJobs from "@/pages/cutting/index";
+import CuttingDetail from "@/pages/cutting/detail";
+import StitchingJobs from "@/pages/stitching/index";
+import StitchingDetail from "@/pages/stitching/detail";
+import QCEntries from "@/pages/qc/index";
+import OverlockButton from "@/pages/overlock-button/index";
+import FinishingEntries from "@/pages/finishing/index";
+import FinalStore from "@/pages/final-store/index";
+import AccountsList from "@/pages/accounts/index";
+import AccountDetail from "@/pages/accounts/detail";
 
 const queryClient = new QueryClient();
 
@@ -33,6 +44,22 @@ function Router() {
         <Route path="/inventory" component={Inventory} />
         <Route path="/templates" component={Templates} />
         <Route path="/reports" component={Reports} />
+
+        <Route path="/masters" component={MastersList} />
+
+        <Route path="/cutting" component={CuttingJobs} />
+        <Route path="/cutting/:id" component={CuttingDetail} />
+
+        <Route path="/stitching" component={StitchingJobs} />
+        <Route path="/stitching/:id" component={StitchingDetail} />
+
+        <Route path="/qc" component={QCEntries} />
+        <Route path="/overlock-button" component={OverlockButton} />
+        <Route path="/finishing" component={FinishingEntries} />
+        <Route path="/final-store" component={FinalStore} />
+
+        <Route path="/accounts" component={AccountsList} />
+        <Route path="/accounts/:masterId" component={AccountDetail} />
         
         <Route component={NotFound} />
       </Switch>

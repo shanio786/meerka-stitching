@@ -6,6 +6,17 @@ import templatesRouter from "./templates";
 import grnRouter from "./grn";
 import inventoryRouter from "./inventory";
 import dashboardRouter from "./dashboard";
+import storageRouter from "./storage";
+import mastersRouter from "./masters";
+import sizesRouter from "./sizes";
+import cuttingRouter from "./cutting";
+import stitchingRouter from "./stitching";
+import qualityRouter from "./quality";
+import overlockButtonRouter from "./overlock-button";
+import finishingRouter from "./finishing";
+import finalStoreRouter from "./final-store";
+import accountsRouter from "./accounts";
+import imagesRouter from "./images";
 
 const router: IRouter = Router();
 
@@ -16,5 +27,16 @@ router.use(templatesRouter);
 router.use(grnRouter);
 router.use(inventoryRouter);
 router.use(dashboardRouter);
+router.use(storageRouter);
+router.use(mastersRouter);
+router.use(sizesRouter);
+router.use(cuttingRouter);
+router.use(stitchingRouter);
+router.use(qualityRouter);
+router.use(overlockButtonRouter);
+router.use(finishingRouter);
+router.use(finalStoreRouter);
+router.use(accountsRouter);
+router.use(imagesRouter);
 
 export default router;
