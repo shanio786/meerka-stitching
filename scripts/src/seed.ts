@@ -1,4 +1,22 @@
-import { db, articlesTable, articleComponentsTable, componentTemplatesTable, templateItemsTable, grnEntriesTable, mastersTable, sizesTable, masterAccountsTable, cuttingJobsTable, cuttingAssignmentsTable, cuttingSizeBreakdownTable, stitchingJobsTable, stitchingAssignmentsTable, qcEntriesTable, overlockButtonEntriesTable, finishingEntriesTable, finalStoreReceiptsTable, masterTransactionsTable } from "@workspace/db";
+import {
+  db,
+  articlesTable,
+  articleComponentsTable,
+  articleAccessoriesTable,
+  mastersTable,
+  sizesTable,
+  masterAccountsTable,
+  cuttingJobsTable,
+  cuttingAssignmentsTable,
+  cuttingSizeBreakdownTable,
+  stitchingJobsTable,
+  stitchingAssignmentsTable,
+  qcEntriesTable,
+  overlockButtonEntriesTable,
+  finishingEntriesTable,
+  finalStoreReceiptsTable,
+  masterTransactionsTable,
+} from "@workspace/db";
 import { sql } from "drizzle-orm";
 
 async function seed() {
@@ -6,80 +24,55 @@ async function seed() {
 
   const [art1] = await db.insert(articlesTable).values({
     articleCode: "LS-3PC-001",
-    articleName: "Ladies Summer 3PC",
+    articleName: "Ladies Summer 3PC Lawn",
     collectionName: "Summer Collection 2026",
-    brandCustomer: "Al-Karim Textiles",
-    fabricType: "Lawn",
-    season: "Summer",
-    category: "3PC",
+    partType: "Apna",
+    category: "Summer",
+    piecesType: "3PC",
     isActive: true,
   }).returning();
 
   const [art2] = await db.insert(articlesTable).values({
-    articleCode: "GS-SK-002",
-    articleName: "Gents Shalwar Kameez",
-    collectionName: "Premium Collection",
-    brandCustomer: null,
-    fabricType: "Cotton",
-    season: "All Season",
-    category: "2PC",
+    articleCode: "GW-2PC-005",
+    articleName: "Gents Winter 2PC Khaddar",
+    collectionName: "Winter 2026",
+    partType: "Bahir Ka",
+    category: "Winter",
+    piecesType: "2PC",
     isActive: true,
   }).returning();
 
   const [art3] = await db.insert(articlesTable).values({
-    articleCode: "KD-2PC-003",
-    articleName: "Kids 2PC Cotton",
-    collectionName: "Kids Wear 2026",
-    brandCustomer: "Junior Fashion",
-    fabricType: "Cotton",
-    season: "Summer",
-    category: "2PC",
+    articleCode: "EX-SS-010",
+    articleName: "Export Single Shirt Cotton",
+    collectionName: "Spring Export",
+    partType: "Export",
+    category: "Spring",
+    piecesType: "Single Shirt",
     isActive: true,
   }).returning();
 
   await db.insert(articleComponentsTable).values([
-    { articleId: art1.id, componentName: "Shirt", componentType: "Main", fabricType: "Lawn", requiredMeters: 2.5, unitType: "Meter", wastagePercent: 5 },
-    { articleId: art1.id, componentName: "Trouser", componentType: "Main", fabricType: "Cotton", requiredMeters: 2.0, unitType: "Meter", wastagePercent: 3 },
-    { articleId: art1.id, componentName: "Dupatta", componentType: "Main", fabricType: "Chiffon", requiredMeters: 2.25, unitType: "Meter", wastagePercent: 2 },
-    { articleId: art1.id, componentName: "Patch", componentType: "Extra", fabricType: "Lawn", requiredMeters: 0.5, unitType: "Meter" },
+    { articleId: art1.id, componentName: "Shirt", fabricName: "Lawn", totalMetersReceived: 250 },
+    { articleId: art1.id, componentName: "Trouser", fabricName: "Cotton", totalMetersReceived: 180 },
+    { articleId: art1.id, componentName: "Dupatta", fabricName: "Chiffon", totalMetersReceived: 120 },
   ]);
 
   await db.insert(articleComponentsTable).values([
-    { articleId: art2.id, componentName: "Kameez", componentType: "Main", fabricType: "Cotton", requiredMeters: 3.0, unitType: "Meter", wastagePercent: 4 },
-    { articleId: art2.id, componentName: "Shalwar", componentType: "Main", fabricType: "Cotton", requiredMeters: 2.5, unitType: "Meter", wastagePercent: 3 },
+    { articleId: art2.id, componentName: "Kurta", fabricName: "Khaddar", totalMetersReceived: 300 },
+    { articleId: art2.id, componentName: "Shalwar", fabricName: "Khaddar", totalMetersReceived: 200 },
   ]);
 
   await db.insert(articleComponentsTable).values([
-    { articleId: art3.id, componentName: "Shirt", componentType: "Main", fabricType: "Cotton", requiredMeters: 1.5, unitType: "Meter", wastagePercent: 5 },
-    { articleId: art3.id, componentName: "Trouser", componentType: "Main", fabricType: "Cotton", requiredMeters: 1.0, unitType: "Meter", wastagePercent: 3 },
+    { articleId: art3.id, componentName: "Shirt", fabricName: "Cotton", totalMetersReceived: 400 },
   ]);
 
-  const [tmpl1] = await db.insert(componentTemplatesTable).values({
-    templateName: "Standard 3PC (Ladies)",
-    description: "Shirt + Trouser + Dupatta template for ladies suits",
-  }).returning();
-
-  await db.insert(templateItemsTable).values([
-    { templateId: tmpl1.id, componentName: "Shirt", componentType: "Main", fabricType: "Lawn", requiredMeters: 2.5, unitType: "Meter", wastagePercent: 5 },
-    { templateId: tmpl1.id, componentName: "Trouser", componentType: "Main", fabricType: "Cotton", requiredMeters: 2.0, unitType: "Meter", wastagePercent: 3 },
-    { templateId: tmpl1.id, componentName: "Dupatta", componentType: "Main", fabricType: "Chiffon", requiredMeters: 2.25, unitType: "Meter", wastagePercent: 2 },
-  ]);
-
-  const [tmpl2] = await db.insert(componentTemplatesTable).values({
-    templateName: "Standard 2PC (Gents)",
-    description: "Kameez + Shalwar for gents",
-  }).returning();
-
-  await db.insert(templateItemsTable).values([
-    { templateId: tmpl2.id, componentName: "Kameez", componentType: "Main", fabricType: "Cotton", requiredMeters: 3.0, unitType: "Meter", wastagePercent: 4 },
-    { templateId: tmpl2.id, componentName: "Shalwar", componentType: "Main", fabricType: "Cotton", requiredMeters: 2.5, unitType: "Meter", wastagePercent: 3 },
-  ]);
-
-  await db.insert(grnEntriesTable).values([
-    { grnNumber: "GRN-2026-001", date: new Date("2026-04-01"), supplierName: "Al-Karim Textiles", articleId: art1.id, totalRolls: 5, totalMeters: 300, ratePerMeter: 450, totalCost: 135000, batchNumber: "B-001", colorLot: "CL-RED-01", qualityType: "A-Grade", rackLocation: "Rack A-1" },
-    { grnNumber: "GRN-2026-002", date: new Date("2026-04-05"), supplierName: "Fateh Textiles", articleId: art1.id, totalRolls: 3, totalMeters: 180, ratePerMeter: 420, totalCost: 75600, batchNumber: "B-002", colorLot: "CL-BLU-01", qualityType: "A-Grade", rackLocation: "Rack A-2" },
-    { grnNumber: "GRN-2026-003", date: new Date("2026-04-08"), supplierName: "Hassan Cotton Mills", articleId: art2.id, totalRolls: 8, totalMeters: 500, ratePerMeter: 350, totalCost: 175000, batchNumber: "B-003", colorLot: "CL-WHT-01", qualityType: "A-Grade", rackLocation: "Rack B-1" },
-    { grnNumber: "GRN-2026-004", date: new Date("2026-04-10"), supplierName: "Junior Fabrics", articleId: art3.id, totalRolls: 2, totalMeters: 100, ratePerMeter: 280, totalCost: 28000, batchNumber: "B-004", colorLot: "CL-PNK-01", qualityType: "B-Grade", rackLocation: "Rack C-1" },
+  await db.insert(articleAccessoriesTable).values([
+    { articleId: art1.id, accessoryName: "Lace Border", quantity: 500, meters: 100, ratePerUnit: 15, totalAmount: 7500 },
+    { articleId: art1.id, accessoryName: "Patch Embroidery", quantity: 250, ratePerUnit: 45, totalAmount: 11250 },
+    { articleId: art1.id, accessoryName: "Buttons", quantity: 1500, ratePerUnit: 2, totalAmount: 3000 },
+    { articleId: art2.id, accessoryName: "Buttons", quantity: 1000, ratePerUnit: 5, totalAmount: 5000 },
+    { articleId: art2.id, accessoryName: "Zipper", quantity: 500, ratePerUnit: 8, totalAmount: 4000 },
   ]);
 
   await db.insert(sizesTable).values([
@@ -200,11 +193,11 @@ async function seed() {
   });
 
   console.log("Seed complete!");
-  console.log("Created: 3 articles, 7 masters, 6 sizes, 2 cutting jobs, 1 stitching job, 1 QC entry, 2 overlock/button entries, 1 finishing entry, 1 store receipt");
+  console.log("Created: 3 articles with components + accessories, 7 masters, 6 sizes, 2 cutting jobs, 1 stitching job, 1 QC entry, 2 overlock/button entries, 1 finishing entry, 1 store receipt");
   process.exit(0);
 }
 
-seed().catch((err) => {
+seed().catch((err: Error) => {
   console.error("Seed error:", err);
   process.exit(1);
 });
