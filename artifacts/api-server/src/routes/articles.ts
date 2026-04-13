@@ -52,7 +52,7 @@ router.get("/articles", async (req, res): Promise<void> => {
 router.post("/articles", async (req, res): Promise<void> => {
   const { articleCode, articleName, collectionName, partType, category, piecesType } = req.body;
   if (!articleCode || !articleName || !partType || !category || !piecesType) {
-    res.status(400).json({ error: "Article code, name, part type, category, and pieces type are required" });
+    res.status(400).json({ error: "Article code, name, work type, category, and pieces type are required" });
     return;
   }
 

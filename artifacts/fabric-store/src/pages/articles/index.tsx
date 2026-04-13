@@ -99,7 +99,7 @@ export default function ArticlesList() {
             </Select>
             <Select value={partTypeFilter} onValueChange={setPartTypeFilter}>
               <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Part Type" />
+                <SelectValue placeholder="Work Type" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
@@ -125,7 +125,7 @@ export default function ArticlesList() {
                     <TableHead>Code</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Collection</TableHead>
-                    <TableHead>Part Type</TableHead>
+                    <TableHead>Work Type</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead>Pieces</TableHead>
                     <TableHead className="text-right">Components</TableHead>

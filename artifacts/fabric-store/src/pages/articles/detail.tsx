@@ -158,7 +158,7 @@ export default function ArticleDetailPage() {
 
       <div className="grid gap-4 md:grid-cols-5">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Part Type</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Work Type</CardTitle></CardHeader>
           <CardContent><Badge variant="outline" className="text-base">{article.partType}</Badge></CardContent>
         </Card>
         <Card>

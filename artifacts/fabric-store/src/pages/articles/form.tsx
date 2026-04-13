@@ -13,7 +13,7 @@ import { Plus } from "lucide-react";
 
 interface CustomOption { id: number; optionType: string; optionValue: string; }
 
-const DEFAULT_PART_TYPES = ["Apna", "Bahir Ka", "CMD", "Export"];
+const DEFAULT_PART_TYPES = ["Meerak", "CMD", "Export"];
 const DEFAULT_CATEGORIES = ["Summer", "Winter", "Spring", "Fall"];
 const DEFAULT_PIECES_TYPES = ["Single Shirt", "2PC", "3PC", "4PC"];
 
@@ -148,7 +148,7 @@ export default function ArticleForm() {
             </div>
 
             <div className="grid grid-cols-3 gap-4">
-              {renderSelectWithAdd("Part Type", "partType", DEFAULT_PART_TYPES, form.partType, v => setForm(f => ({ ...f, partType: v })))}
+              {renderSelectWithAdd("Work Type", "partType", DEFAULT_PART_TYPES, form.partType, v => setForm(f => ({ ...f, partType: v })))}
               {renderSelectWithAdd("Category", "category", DEFAULT_CATEGORIES, form.category, v => setForm(f => ({ ...f, category: v })))}
               {renderSelectWithAdd("Pieces Type", "piecesType", DEFAULT_PIECES_TYPES, form.piecesType, v => setForm(f => ({ ...f, piecesType: v })))}
             </div>

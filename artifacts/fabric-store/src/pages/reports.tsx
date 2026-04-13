@@ -202,7 +202,7 @@ export default function Reports() {
           <Card><CardContent className="pt-6">
             {loadingArticles ? <div className="space-y-3">{[1,2,3].map(i=><Skeleton key={i} className="h-14 w-full" />)}</div> : !filteredArticles.length ? <div className="text-center py-12 text-muted-foreground">No articles</div> : (
               <Table><TableHeader><TableRow>
-                <TableHead>Code</TableHead><TableHead>Name</TableHead><TableHead>Collection</TableHead><TableHead>Part Type</TableHead><TableHead>Category</TableHead><TableHead>Pieces</TableHead><TableHead className="text-right">Components</TableHead><TableHead className="text-right">Meters</TableHead>
+                <TableHead>Code</TableHead><TableHead>Name</TableHead><TableHead>Collection</TableHead><TableHead>Work Type</TableHead><TableHead>Category</TableHead><TableHead>Pieces</TableHead><TableHead className="text-right">Components</TableHead><TableHead className="text-right">Meters</TableHead>
               </TableRow></TableHeader><TableBody>
                 {filteredArticles.map(a => <TableRow key={a.id}>
                   <TableCell className="font-mono font-medium">{a.articleCode}</TableCell><TableCell>{a.articleName}</TableCell><TableCell className="text-muted-foreground">{a.collectionName || "-"}</TableCell><TableCell><Badge variant="outline">{a.partType}</Badge></TableCell><TableCell>{a.category}</TableCell><TableCell><Badge variant="secondary">{a.piecesType}</Badge></TableCell><TableCell className="text-right">{a.componentCount}</TableCell><TableCell className="text-right font-mono">{a.totalMetersReceived}m</TableCell>
