@@ -45,7 +45,7 @@ export default function CuttingJobs() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
 
-  const [form, setForm] = useState({ articleId: "", jobDate: new Date().toISOString().split("T")[0], notes: "" });
+  const [form, setForm] = useState({ articleId: "", jobDate: new Date().toISOString().split("T")[0], demandPieces: "", notes: "" });
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -70,10 +70,10 @@ export default function CuttingJobs() {
   const handleCreate = async () => {
     if (!form.articleId) { toast({ title: "Select an article", variant: "destructive" }); return; }
     try {
-      await apiPost("/cutting/jobs", { articleId: parseInt(form.articleId), jobDate: form.jobDate, notes: form.notes });
+      await apiPost("/cutting/jobs", { articleId: parseInt(form.articleId), jobDate: form.jobDate, demandPieces: form.demandPieces ? parseInt(form.demandPieces) : undefined, notes: form.notes });
       toast({ title: "Cutting job created" });
       setDialogOpen(false);
-      setForm({ articleId: "", jobDate: new Date().toISOString().split("T")[0], notes: "" });
+      setForm({ articleId: "", jobDate: new Date().toISOString().split("T")[0], demandPieces: "", notes: "" });
       fetchJobs();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to create";
@@ -110,7 +110,10 @@ export default function CuttingJobs() {
                   searchPlaceholder="Type article name or code..."
                 />
               </div>
-              <div><Label>Job Date *</Label><Input type="date" value={form.jobDate} onChange={e => setForm({ ...form, jobDate: e.target.value })} /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Job Date *</Label><Input type="date" value={form.jobDate} onChange={e => setForm({ ...form, jobDate: e.target.value })} /></div>
+                <div><Label>Demand (Pieces / Suits)</Label><Input type="number" value={form.demandPieces} onChange={e => setForm({ ...form, demandPieces: e.target.value })} placeholder="e.g. 100" /></div>
+              </div>
               <div><Label>Notes</Label><Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
               <Button className="w-full" onClick={handleCreate}>Create Job</Button>
             </div>

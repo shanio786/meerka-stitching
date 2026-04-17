@@ -42,8 +42,8 @@ const navGroups: NavGroup[] = [
     items: [
       { name: "Cutting", href: "/cutting", icon: Scissors },
       { name: "Stitching", href: "/stitching", icon: Shirt },
-      { name: "Quality (QC)", href: "/qc", icon: ClipboardCheck },
       { name: "Overlock/Button", href: "/overlock-button", icon: CircleDot },
+      { name: "Quality (QC)", href: "/qc", icon: ClipboardCheck },
       { name: "Finishing", href: "/finishing", icon: Sparkles },
       { name: "Final Store", href: "/final-store", icon: Store },
     ],

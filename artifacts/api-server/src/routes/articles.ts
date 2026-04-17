@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, ilike, and, sql } from "drizzle-orm";
-import { db, articlesTable, articleComponentsTable, articleAccessoriesTable } from "@workspace/db";
+import { db, articlesTable, articleComponentsTable, articleAccessoriesTable, cuttingAssignmentsTable, cuttingJobsTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -85,6 +85,42 @@ router.get("/articles/:id", async (req, res): Promise<void> => {
   const accessories = await db.select().from(articleAccessoriesTable).where(eq(articleAccessoriesTable.articleId, id));
 
   res.json({ ...article, components, accessories });
+});
+
+router.get("/articles/:id/cutting-stock", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  const excludeJobId = req.query.excludeJobId ? parseInt(String(req.query.excludeJobId), 10) : null;
+  const [article] = await db.select().from(articlesTable).where(eq(articlesTable.id, id));
+  if (!article) { res.status(404).json({ error: "Article not found" }); return; }
+
+  const components = await db.select().from(articleComponentsTable).where(eq(articleComponentsTable.articleId, id));
+
+  const result = await Promise.all(components.map(async (c) => {
+    const conditions = [
+      eq(cuttingJobsTable.articleId, id),
+      eq(cuttingAssignmentsTable.componentName, c.componentName),
+    ];
+    const rows = await db
+      .select({ given: cuttingAssignmentsTable.fabricGivenMeters, returned: cuttingAssignmentsTable.fabricReturnedMeters, jobId: cuttingAssignmentsTable.jobId })
+      .from(cuttingAssignmentsTable)
+      .innerJoin(cuttingJobsTable, eq(cuttingJobsTable.id, cuttingAssignmentsTable.jobId))
+      .where(and(...conditions));
+    let totalGiven = 0;
+    for (const r of rows) {
+      if (excludeJobId && r.jobId === excludeJobId) continue;
+      totalGiven += (r.given || 0) - (r.returned || 0);
+    }
+    const available = (c.totalMetersReceived || 0) - totalGiven;
+    return {
+      componentName: c.componentName,
+      fabricName: c.fabricName,
+      totalReceived: c.totalMetersReceived || 0,
+      totalGiven,
+      available: Math.max(0, available),
+    };
+  }));
+
+  res.json(result);
 });
 
 router.patch("/articles/:id", async (req, res): Promise<void> => {

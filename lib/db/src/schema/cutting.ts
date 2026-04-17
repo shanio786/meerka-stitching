@@ -13,11 +13,18 @@ export const cuttingJobsTable = pgTable("cutting_jobs", {
   id: serial("id").primaryKey(),
   articleId: integer("article_id").notNull().references(() => articlesTable.id, { onDelete: "cascade" }),
   jobDate: timestamp("job_date", { withTimezone: true }).notNull(),
+  demandPieces: integer("demand_pieces"),
   status: jobStatusEnum("status").notNull().default("pending"),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
+
+export const handoverStatusEnum = pgEnum("handover_status", [
+  "with_cutter",
+  "returned_to_store",
+  "received_by_next",
+]);
 
 export const cuttingAssignmentsTable = pgTable("cutting_assignments", {
   id: serial("id").primaryKey(),
@@ -38,6 +45,9 @@ export const cuttingAssignmentsTable = pgTable("cutting_assignments", {
   wasteMeters: doublePrecision("waste_meters"),
   fabricReturnedMeters: doublePrecision("fabric_returned_meters"),
   totalAmount: doublePrecision("total_amount"),
+  handoverStatus: handoverStatusEnum("handover_status").notNull().default("with_cutter"),
+  receivedBy: text("received_by"),
+  handoverDate: timestamp("handover_date", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
