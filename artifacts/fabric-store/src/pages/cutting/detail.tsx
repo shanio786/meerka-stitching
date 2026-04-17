@@ -436,7 +436,7 @@ export default function CuttingDetail() {
                     <TableCell className="text-right font-mono">{a.fabricPerPiece ? `${a.fabricPerPiece}m` : "-"}</TableCell>
                     <TableCell className="text-right">{a.estimatedPieces ? <span className="font-mono font-bold text-blue-600">{a.estimatedPieces}</span> : "-"}</TableCell>
                     <TableCell className="text-right font-mono text-xs">
-                      {a.ratePerPiece ? `Rs.${a.ratePerPiece}/pc` : a.ratePerSuit ? `Rs.${a.ratePerSuit}/suit` : "-"}
+                      {a.ratePerPiece ? `Rs.${a.ratePerPiece}/pc` : a.ratePerSuit ? <span className="text-purple-700">Rs.{a.ratePerSuit}/suit</span> : a.notes?.startsWith("Bundled with suit") ? <span className="text-muted-foreground italic">bundled</span> : "-"}
                     </TableCell>
                     <TableCell className="text-right font-mono font-bold">{a.piecesCut || "-"}</TableCell>
                     <TableCell className="text-right font-mono font-bold text-green-600">{a.totalAmount ? `Rs.${a.totalAmount.toLocaleString()}` : "-"}</TableCell>

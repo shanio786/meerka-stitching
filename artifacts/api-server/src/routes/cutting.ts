@@ -151,7 +151,9 @@ router.post("/cutting/assignments", async (req, res): Promise<void> => {
 
     const result = await db.transaction(async (tx) => {
       const created = [];
+      let suitRateApplied = false;
       for (const item of items) {
+        const useSuitRate = ratePerSuit && !suitRateApplied;
         const [assignment] = await tx.insert(cuttingAssignmentsTable).values({
           jobId, masterId,
           componentName: item.componentName,
@@ -159,10 +161,11 @@ router.post("/cutting/assignments", async (req, res): Promise<void> => {
           fabricGivenMeters: Number(item.fabricGivenMeters),
           fabricPerPiece: item.fabricPerPiece ? Number(item.fabricPerPiece) : null,
           estimatedPieces: item.estimatedPieces ? Number(item.estimatedPieces) : null,
-          ratePerPiece: item.ratePerPiece ? Number(item.ratePerPiece) : null,
-          ratePerSuit: ratePerSuit ? Number(ratePerSuit) : null,
-          notes,
+          ratePerPiece: ratePerSuit ? null : (item.ratePerPiece ? Number(item.ratePerPiece) : null),
+          ratePerSuit: useSuitRate ? Number(ratePerSuit) : null,
+          notes: useSuitRate ? `${notes || ""}${notes ? " | " : ""}Suit rate covers: ${items.map((it: { componentName: string }) => it.componentName).join(", ")}` : (ratePerSuit ? `Bundled with suit rate (paid via ${items[0].componentName})` : notes),
         }).returning();
+        if (useSuitRate) suitRateApplied = true;
         created.push(assignment);
 
         if (sizes && Array.isArray(sizes)) {
