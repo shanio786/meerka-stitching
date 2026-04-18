@@ -79,7 +79,7 @@ function HomeGate() {
   if (isLoading) {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center text-sm text-muted-foreground">
-        Load ho raha hai...
+        Loading...
       </div>
     );
   }

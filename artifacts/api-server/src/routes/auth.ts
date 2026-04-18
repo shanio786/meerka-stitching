@@ -14,17 +14,17 @@ const router: IRouter = Router();
 router.post("/auth/login", async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {
-    res.status(400).json({ error: "Username aur password zaroori hai" });
+    res.status(400).json({ error: "Username and password are required" });
     return;
   }
   const user = await findUserByUsername(String(username));
   if (!user || user.isActive !== "true") {
-    res.status(401).json({ error: "Galat username ya password" });
+    res.status(401).json({ error: "Invalid username or password" });
     return;
   }
   const ok = await verifyPassword(String(password), user.passwordHash);
   if (!ok) {
-    res.status(401).json({ error: "Galat username ya password" });
+    res.status(401).json({ error: "Invalid username or password" });
     return;
   }
   req.session.userId = user.id;
@@ -34,7 +34,7 @@ router.post("/auth/login", async (req, res) => {
   req.session.save((err) => {
     if (err) {
       req.log?.error({ err }, "session save failed");
-      res.status(500).json({ error: "Login fail ho gaya" });
+      res.status(500).json({ error: "Login failed" });
       return;
     }
     res.json({
@@ -71,21 +71,21 @@ router.get("/me", (req, res) => {
 router.patch("/me/password", requireAuth, async (req, res) => {
   const { currentPassword, newPassword } = req.body || {};
   if (!currentPassword || !newPassword) {
-    res.status(400).json({ error: "Purana aur naya password zaroori hai" });
+    res.status(400).json({ error: "Current and new password are required" });
     return;
   }
   if (String(newPassword).length < 6) {
-    res.status(400).json({ error: "Naya password kam az kam 6 characters ka ho" });
+    res.status(400).json({ error: "New password must be at least 6 characters" });
     return;
   }
   const user = await findUserById(req.userId!);
   if (!user) {
-    res.status(404).json({ error: "User nahin mila" });
+    res.status(404).json({ error: "User not found" });
     return;
   }
   const ok = await verifyPassword(String(currentPassword), user.passwordHash);
   if (!ok) {
-    res.status(401).json({ error: "Purana password galat hai" });
+    res.status(401).json({ error: "Current password is incorrect" });
     return;
   }
   const newHash = await hashPassword(String(newPassword));
@@ -103,7 +103,7 @@ router.patch("/me/profile", requireAuth, async (req, res) => {
     if (newUsername !== req.userName) {
       const existing = await findUserByUsername(newUsername);
       if (existing && existing.id !== req.userId) {
-        res.status(409).json({ error: "Ye username pehle se mojood hai" });
+        res.status(409).json({ error: "This username is already taken" });
         return;
       }
       updates.username = newUsername;

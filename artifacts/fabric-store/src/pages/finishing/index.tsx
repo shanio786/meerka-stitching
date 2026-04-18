@@ -175,7 +175,7 @@ export default function FinishingEntries() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Finishing" description="QC ke baad pieces — pressing, folding, packing yahan track karein" actions={
+      <PageHeader title="Finishing" description="Track pressing, folding and packing of pieces after QC" actions={
         <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setForm(emptyForm); }}>
           <DialogTrigger asChild><Button data-testid="button-new-finishing"><Plus className="mr-2 h-4 w-4" /> New Entry</Button></DialogTrigger>
           <DialogContent>
@@ -217,7 +217,7 @@ export default function FinishingEntries() {
 
       <PendingPoolCard
         title="Pending from QC"
-        description="QC pass ho chuke pieces — yahan finishing ke liye receive karein."
+        description="Pieces that passed QC — receive them for finishing here."
         endpoint="/finishing/pending-from-qc"
         fromLabel="Inspector"
         onReceive={handlePoolReceive}

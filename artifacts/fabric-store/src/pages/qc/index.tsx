@@ -188,7 +188,7 @@ export default function QCEntries() {
 
       <PendingPoolCard
         title="Pending from Overlock/Button"
-        description="Overlock/Button complete ho chuke pieces — yahan inspect karne ke liye click karo."
+        description="Pieces completed in overlock/button — click to receive and inspect them here."
         endpoint="/qc/pending-from-overlock"
         fromLabel="OB Master"
         onReceive={handlePoolReceive}

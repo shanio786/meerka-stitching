@@ -33,9 +33,9 @@ export function ProfileDialog({ open, onOpenChange }: { open: boolean; onOpenCha
     try {
       await apiPatch("/me/profile", { username: username.trim(), fullName: fullName.trim() });
       await refresh();
-      toast({ title: "Profile update ho gaya" });
+      toast({ title: "Profile updated" });
     } catch (err) {
-      toast({ title: "Update fail", description: (err as Error).message, variant: "destructive" });
+      toast({ title: "Update failed", description: (err as Error).message, variant: "destructive" });
     } finally {
       setSavingProfile(false);
     }
@@ -44,23 +44,23 @@ export function ProfileDialog({ open, onOpenChange }: { open: boolean; onOpenCha
   const onChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
-      toast({ title: "Naya password match nahin karta", variant: "destructive" });
+      toast({ title: "New passwords do not match", variant: "destructive" });
       return;
     }
     if (newPassword.length < 6) {
-      toast({ title: "Password kam az kam 6 characters ka ho", variant: "destructive" });
+      toast({ title: "Password must be at least 6 characters", variant: "destructive" });
       return;
     }
     setSavingPassword(true);
     try {
       await apiPatch("/me/password", { currentPassword, newPassword });
-      toast({ title: "Password change ho gaya" });
+      toast({ title: "Password changed" });
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
       onOpenChange(false);
     } catch (err) {
-      toast({ title: "Password change fail", description: (err as Error).message, variant: "destructive" });
+      toast({ title: "Password change failed", description: (err as Error).message, variant: "destructive" });
     } finally {
       setSavingPassword(false);
     }
@@ -70,8 +70,8 @@ export function ProfileDialog({ open, onOpenChange }: { open: boolean; onOpenCha
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md" data-testid="profile-dialog">
         <DialogHeader>
-          <DialogTitle>Mera Account</DialogTitle>
-          <DialogDescription>Apna profile aur password yahan update karein.</DialogDescription>
+          <DialogTitle>My Account</DialogTitle>
+          <DialogDescription>Update your profile and password here.</DialogDescription>
         </DialogHeader>
         <Tabs defaultValue="profile" className="mt-2">
           <TabsList className="grid w-full grid-cols-2">
@@ -82,7 +82,7 @@ export function ProfileDialog({ open, onOpenChange }: { open: boolean; onOpenCha
           <TabsContent value="profile" className="mt-4">
             <form onSubmit={onSaveProfile} className="space-y-3">
               <div>
-                <Label htmlFor="full-name">Pura Naam</Label>
+                <Label htmlFor="full-name">Full Name</Label>
                 <Input
                   id="full-name"
                   data-testid="input-full-name"
@@ -103,7 +103,7 @@ export function ProfileDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                 Role: <span className="font-semibold capitalize">{me?.role || "-"}</span>
               </div>
               <Button type="submit" className="w-full" disabled={savingProfile} data-testid="button-save-profile">
-                {savingProfile ? "Save..." : "Save Profile"}
+                {savingProfile ? "Saving..." : "Save Profile"}
               </Button>
             </form>
           </TabsContent>
@@ -111,7 +111,7 @@ export function ProfileDialog({ open, onOpenChange }: { open: boolean; onOpenCha
           <TabsContent value="password" className="mt-4">
             <form onSubmit={onChangePassword} className="space-y-3">
               <div>
-                <Label htmlFor="current-password">Purana Password</Label>
+                <Label htmlFor="current-password">Current Password</Label>
                 <Input
                   id="current-password"
                   data-testid="input-current-password"
@@ -121,7 +121,7 @@ export function ProfileDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                 />
               </div>
               <div>
-                <Label htmlFor="new-password">Naya Password</Label>
+                <Label htmlFor="new-password">New Password</Label>
                 <Input
                   id="new-password"
                   data-testid="input-new-password"
@@ -131,7 +131,7 @@ export function ProfileDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                 />
               </div>
               <div>
-                <Label htmlFor="confirm-password">Naya Password (dobara)</Label>
+                <Label htmlFor="confirm-password">Confirm New Password</Label>
                 <Input
                   id="confirm-password"
                   data-testid="input-confirm-password"
@@ -141,7 +141,7 @@ export function ProfileDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                 />
               </div>
               <Button type="submit" className="w-full" disabled={savingPassword} data-testid="button-save-password">
-                {savingPassword ? "Save..." : "Change Password"}
+                {savingPassword ? "Saving..." : "Change Password"}
               </Button>
             </form>
           </TabsContent>

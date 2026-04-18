@@ -175,7 +175,7 @@ export default function OverlockButton() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Overlock / Button" description="Stitching se aaye pieces — size + component wise receive aur complete karein" actions={
+      <PageHeader title="Overlock / Button" description="Receive pieces from stitching by size and component, then mark complete" actions={
         <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setForm(emptyForm); }}>
           <DialogTrigger asChild><Button data-testid="button-new-entry"><Plus className="mr-2 h-4 w-4" /> New Entry</Button></DialogTrigger>
           <DialogContent className="max-w-lg">
@@ -220,7 +220,7 @@ export default function OverlockButton() {
 
       <PendingPoolCard
         title="Pending from Stitching"
-        description="Yeh pieces stitching complete ho chuke hain, abhi overlock/button mein receive nahi hue. Click karke receive karo."
+        description="These pieces are completed in stitching but not yet received in overlock/button. Click to receive them."
         endpoint="/overlock-button/pending-from-stitching"
         fromLabel="Stitcher"
         onReceive={handlePoolReceive}

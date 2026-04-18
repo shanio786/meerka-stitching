@@ -77,7 +77,7 @@ export function PendingPoolCard({ title, description, endpoint, fromLabel, showC
           <div className="space-y-2">{[1, 2].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
         ) : !rows.length ? (
           <div className="text-center py-6 text-sm text-muted-foreground bg-white rounded-md border border-dashed">
-            Sab clear hai — koi pieces {fromLabel} se pending nahi.
+            All clear — no pieces pending from {fromLabel}.
           </div>
         ) : (
           <div className="overflow-x-auto rounded-md border bg-white">

@@ -19,7 +19,7 @@ export default function SignInPage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password) {
-      toast({ title: "Username aur password darj karein", variant: "destructive" });
+      toast({ title: "Enter username and password", variant: "destructive" });
       return;
     }
     setLoading(true);
@@ -32,8 +32,8 @@ export default function SignInPage() {
       setLocation("/");
     } catch (err) {
       toast({
-        title: "Login fail",
-        description: (err as Error).message || "Galat username ya password",
+        title: "Login failed",
+        description: (err as Error).message || "Invalid username or password",
         variant: "destructive",
       });
     } finally {
@@ -59,12 +59,12 @@ export default function SignInPage() {
 
         <div className="relative z-10 max-w-md">
           <h1 className="text-4xl font-bold leading-tight">
-            Garment business ko<br />asaani se manage karein
+            Manage your garment<br />business with ease
           </h1>
           <p className="mt-4 text-blue-100/90">
-            Fabric store, cutting, stitching, overlock/button, QC, finishing aur final
-            store — sab ek hi jagah. Real-time reports aur article tracker ke saath
-            behtar faislay karein.
+            Fabric store, cutting, stitching, overlock/button, QC, finishing
+            and final store — all in one place. Make smarter decisions with
+            real-time reports and the article tracker.
           </p>
 
           <div className="mt-8 grid grid-cols-3 gap-3">
@@ -100,7 +100,7 @@ export default function SignInPage() {
           <div className="text-center">
             <h2 className="text-2xl font-bold tracking-tight">Welcome back</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Apna account use karein system mein dakhil hone ke liye
+              Enter your credentials to access your account
             </p>
           </div>
 
@@ -154,7 +154,7 @@ export default function SignInPage() {
                 className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs text-blue-900"
                 data-testid="forgot-password-info"
               >
-                Password reset ke liye admin se rabta karein:
+                Contact the system administrator to reset your password:
                 <br />
                 <a href="tel:+923117597815" className="font-semibold underline">
                   +92 311 7597815
@@ -168,11 +168,11 @@ export default function SignInPage() {
               disabled={loading}
               data-testid="button-sign-in"
             >
-              {loading ? "Sign in..." : "Sign in"}
+              {loading ? "Signing in..." : "Sign in"}
             </Button>
 
             <p className="text-center text-xs text-muted-foreground pt-2">
-              Account ke liye system administrator se rabta karein
+              Contact the system administrator to get an account
             </p>
           </form>
 

@@ -119,7 +119,7 @@ export default function FinalStore() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Final Store" description="Finished pieces receive aur store karein — dispatch ke liye ready" actions={
+      <PageHeader title="Final Store" description="Receive and store finished pieces — ready for dispatch" actions={
         <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setForm(emptyForm); }}>
           <DialogTrigger asChild><Button data-testid="button-receive-stock"><Plus className="mr-2 h-4 w-4" /> Receive Stock</Button></DialogTrigger>
           <DialogContent>
@@ -151,7 +151,7 @@ export default function FinalStore() {
 
       <PendingPoolCard
         title="Pending from Finishing"
-        description="Finishing complete ho chuke pieces — yahan store mein receive karein."
+        description="Pieces completed in finishing — receive them into the store here."
         endpoint="/final-store/pending-from-finishing"
         fromLabel="Worker"
         showComponent={false}
