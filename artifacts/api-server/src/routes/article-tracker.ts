@@ -87,7 +87,7 @@ router.get("/articles/:id/tracker", async (req, res): Promise<void> => {
           componentName: stitchingAssignmentsTable.componentName,
           size: stitchingAssignmentsTable.size,
           quantityGiven: stitchingAssignmentsTable.quantityGiven,
-          quantityCompleted: stitchingAssignmentsTable.quantityCompleted,
+          piecesCompleted: stitchingAssignmentsTable.piecesCompleted,
           ratePerPiece: stitchingAssignmentsTable.ratePerPiece,
           totalAmount: stitchingAssignmentsTable.totalAmount,
           status: stitchingAssignmentsTable.status,
@@ -163,7 +163,7 @@ router.get("/articles/:id/tracker", async (req, res): Promise<void> => {
 
   // Aggregate sums
   const totalPiecesCut = cuttingAssignments.reduce((s, a) => s + (a.piecesCut || 0), 0);
-  const totalPiecesStitched = stitchingAssignments.reduce((s, a) => s + (a.quantityCompleted || 0), 0);
+  const totalPiecesStitched = stitchingAssignments.reduce((s, a) => s + (a.piecesCompleted || 0), 0);
   const totalPiecesPassedQc = qcEntries.reduce((s, e) => s + (e.passedQty || 0), 0);
   const totalPiecesPacked = finishingEntries.reduce((s, e) => s + (e.packedQty || 0), 0);
   const totalPiecesInFinalStore = finalStore.reduce((s, e) => s + (e.packedQty || 0), 0);
@@ -192,7 +192,7 @@ router.get("/articles/:id/tracker", async (req, res): Promise<void> => {
       .reduce((sum, s) => sum + (s.completedQty && s.completedQty > 0 ? s.completedQty : s.quantity), 0);
     const stitched = stitchingAssignments
       .filter((a) => a.size === size)
-      .reduce((sum, a) => sum + (a.quantityCompleted || 0), 0);
+      .reduce((sum, a) => sum + (a.piecesCompleted || 0), 0);
     const qcPassed = qcEntries
       .filter((e) => e.size === size)
       .reduce((sum, e) => sum + (e.passedQty || 0), 0);
