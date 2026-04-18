@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Wallet, TrendingUp, CreditCard, Plus, ArrowDown, ArrowUp, Printer } from "lucide-react";
+import { Wallet, TrendingUp, CreditCard, Plus, ArrowDown, ArrowUp, Printer, Search, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost } from "@/lib/api";
 import { format } from "date-fns";
@@ -50,6 +50,10 @@ export default function AccountDetail() {
   const [ledger, setLedger] = useState<LedgerData | null>(null);
   const [loading, setLoading] = useState(true);
   const [payDialog, setPayDialog] = useState(false);
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const { toast } = useToast();
 
   const [payForm, setPayForm] = useState({ amount: "", paymentMethod: "cash", notes: "", date: new Date().toISOString().split("T")[0] });
@@ -139,9 +143,38 @@ export default function AccountDetail() {
       <Card>
         <CardHeader><CardTitle>Transaction History</CardTitle></CardHeader>
         <CardContent>
-          {!transactions?.length ? (
-            <div className="text-center py-8 text-muted-foreground">No transactions yet</div>
-          ) : (
+          <div className="flex flex-wrap gap-3 mb-4 no-print">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Search description..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
+            </div>
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Type" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="earning">Earnings</SelectItem>
+                <SelectItem value="payment">Payments</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-[140px]" />
+              <span className="text-muted-foreground text-sm">to</span>
+              <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-[140px]" />
+            </div>
+          </div>
+          {(() => {
+            const filtered = transactions.filter(t => {
+              if (typeFilter !== "all" && t.type !== typeFilter) return false;
+              if (search && !t.description.toLowerCase().includes(search.toLowerCase())) return false;
+              const d = t.date.split("T")[0];
+              if (dateFrom && d < dateFrom) return false;
+              if (dateTo && d > dateTo) return false;
+              return true;
+            });
+            return !filtered.length ? (
+              <div className="text-center py-8 text-muted-foreground">{transactions.length === 0 ? "No transactions yet" : "No transactions match your filters"}</div>
+            ) : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -152,7 +185,7 @@ export default function AccountDetail() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {transactions.map((t) => (
+                {filtered.map((t) => (
                   <TableRow key={t.id}>
                     <TableCell>{format(new Date(t.date), "MMM d, yyyy")}</TableCell>
                     <TableCell>{t.description}</TableCell>
@@ -169,7 +202,8 @@ export default function AccountDetail() {
                 ))}
               </TableBody>
             </Table>
-          )}
+            );
+          })()}
         </CardContent>
       </Card>
 
