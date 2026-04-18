@@ -22,7 +22,8 @@ router.get("/masters", async (req, res): Promise<void> => {
 });
 
 router.post("/masters", async (req, res): Promise<void> => {
-  const { name, phone, address, masterType, machineNo, defaultRate, notes } = req.body;
+  const { name, phone, address, machineNo, defaultRate, notes } = req.body;
+  const masterType = req.body.masterType || req.body.type;
   if (!name || !masterType) {
     res.status(400).json({ error: "Name and master type are required" });
     return;

@@ -640,7 +640,7 @@ ${Object.keys(sizesAggregated).length > 0 ? `
                         <div className="flex flex-wrap gap-1 justify-end mt-1">
                           {a.sizes.map((s, idx) => (
                             <Badge key={idx} variant="outline" className="text-[10px] font-mono px-1 py-0 h-4">
-                              {s.size}: {s.completedQty ?? s.quantity}
+                              {s.size}: {a.status === "completed" ? (s.completedQty ?? s.quantity) : s.quantity}
                             </Badge>
                           ))}
                         </div>

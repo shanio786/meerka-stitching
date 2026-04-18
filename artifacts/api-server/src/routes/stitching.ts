@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { db, stitchingJobsTable, stitchingAssignmentsTable, mastersTable, articlesTable, masterAccountsTable, masterTransactionsTable, cuttingAssignmentsTable, cuttingJobsTable, cuttingSizeBreakdownTable } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -40,7 +40,7 @@ router.get("/stitching/pending-from-cutting", async (req, res): Promise<void> =>
   // Fetch size breakdown for each cutting assignment
   const assignmentIds = rows.map((r) => r.cuttingAssignmentId);
   const sizeRows = assignmentIds.length > 0
-    ? await db.select().from(cuttingSizeBreakdownTable).where(sql`${cuttingSizeBreakdownTable.assignmentId} = ANY(${assignmentIds})`)
+    ? await db.select().from(cuttingSizeBreakdownTable).where(inArray(cuttingSizeBreakdownTable.assignmentId, assignmentIds))
     : [];
 
   // Per-size: how much already consumed by stitching
@@ -52,7 +52,7 @@ router.get("/stitching/pending-from-cutting", async (req, res): Promise<void> =>
           consumed: sql<number>`COALESCE(SUM(${stitchingAssignmentsTable.quantityGiven}), 0)`.as("consumed"),
         })
         .from(stitchingAssignmentsTable)
-        .where(sql`${stitchingAssignmentsTable.cuttingAssignmentId} = ANY(${assignmentIds})`)
+        .where(inArray(stitchingAssignmentsTable.cuttingAssignmentId, assignmentIds))
         .groupBy(stitchingAssignmentsTable.cuttingAssignmentId, stitchingAssignmentsTable.size)
     : [];
 
@@ -60,7 +60,7 @@ router.get("/stitching/pending-from-cutting", async (req, res): Promise<void> =>
     const sizes = sizeRows
       .filter((s) => s.assignmentId === r.cuttingAssignmentId)
       .map((s) => {
-        const cutQty = s.completedQty ?? s.quantity;
+        const cutQty = (s.completedQty && s.completedQty > 0) ? s.completedQty : s.quantity;
         const usedRow = consumedBySize.find((c) => c.cuttingAssignmentId === r.cuttingAssignmentId && c.size === s.size);
         const used = Number(usedRow?.consumed ?? 0);
         return { size: s.size, cut: cutQty, available: Math.max(0, cutQty - used) };
