@@ -12,3 +12,4 @@ export * from "./finishing";
 export * from "./final-store";
 export * from "./accounts";
 export * from "./custom-options";
+export * from "./users";

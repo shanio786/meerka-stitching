@@ -1,8 +1,7 @@
 import { Link, useLocation } from "wouter";
-import { UserButton } from "@clerk/react";
-import { 
-  LayoutDashboard, 
-  Package, 
+import {
+  LayoutDashboard,
+  Package,
   BarChart3,
   Menu,
   Bell,
@@ -14,13 +13,26 @@ import {
   Store,
   Users,
   Wallet,
+  LogOut,
+  UserCog,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { useState } from "react";
-import { useMe } from "@/hooks/useMe";
+import { useMe, setCachedMe } from "@/hooks/useMe";
+import { ProfileDialog } from "@/components/profile-dialog";
+import { apiPost } from "@/lib/api";
 
 interface NavGroup {
   label: string;
@@ -62,9 +74,28 @@ const navGroups: NavGroup[] = [
 ];
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { isAdmin } = useMe();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const { me, isAdmin } = useMe();
+
+  const handleLogout = async () => {
+    try {
+      await apiPost("/auth/logout", {});
+    } catch {
+      /* ignore */
+    }
+    setCachedMe({ signedIn: false });
+    setLocation("/sign-in");
+  };
+
+  const initials = (me?.fullName || me?.username || "U")
+    .split(" ")
+    .map((p) => p[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
 
   const visibleGroups = navGroups
     .map((g) => ({ ...g, items: g.items.filter((i) => !i.adminOnly || isAdmin) }))
@@ -164,7 +195,34 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <Bell className="h-5 w-5 text-muted-foreground" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-destructive border-2 border-background"></span>
             </Button>
-            <UserButton afterSignOutUrl={import.meta.env.BASE_URL.replace(/\/$/, "") + "/sign-in"} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-2 px-2" data-testid="button-user-menu">
+                  <div className="w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-semibold flex items-center justify-center">
+                    {initials}
+                  </div>
+                  <span className="hidden sm:inline text-sm font-medium">{me?.fullName || me?.username}</span>
+                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuLabel>
+                  <div className="text-sm font-semibold">{me?.fullName}</div>
+                  <div className="text-xs text-muted-foreground">@{me?.username}</div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setProfileOpen(true)} data-testid="menu-profile">
+                  <UserCog className="w-4 h-4 mr-2" />
+                  Profile / Password
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={handleLogout} data-testid="menu-logout" className="text-red-600 focus:text-red-700">
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />
           </div>
         </header>
 

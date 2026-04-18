@@ -121,3 +121,27 @@ All routes prefixed with `/api/`:
 - ImageUpload uses `useEffect` for initial data fetch
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+
+## Authentication (Custom — added Apr 2026, replaces Clerk)
+
+Local username/password auth with PostgreSQL-backed sessions. No signup; users
+are created only via terminal CLI.
+
+**Defaults seeded on first boot (when users table empty):**
+- `admin` / `admin123` (role: admin)
+- `store` / `store123` (role: management)
+
+**Create / update a user from terminal:**
+```
+pnpm --filter @workspace/api-server run user:create -- <username> <password> [admin|management] [fullName]
+```
+
+**Endpoints:** POST `/api/auth/login`, POST `/api/auth/logout`,
+GET `/api/me`, PATCH `/api/me/password`, PATCH `/api/me/profile`.
+
+**Session storage:** `user_sessions` table (auto-created on boot via `ensureSessionTable`).
+Set `SESSION_SECRET` env var in production.
+
+**Roles:** `admin` (full access including Accounts/payments) and `management`
+(everything except Accounts). Forgot-password flow shows admin contact:
+**+92 311 7597815**.

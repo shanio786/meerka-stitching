@@ -1,11 +1,27 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
-import { clerkMiddleware } from "@clerk/express";
-import { CLERK_PROXY_PATH, clerkProxyMiddleware } from "./middlewares/clerkProxyMiddleware";
+import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
+import { pool } from "@workspace/db";
 import { attachUser } from "./middlewares/auth";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { seedDefaultUsersIfEmpty } from "./lib/auth";
+
+// Pre-create the session table so connect-pg-simple doesn't need its bundled
+// table.sql at runtime (esbuild can't bundle the .sql file).
+async function ensureSessionTable(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS "user_sessions" (
+      "sid" varchar NOT NULL COLLATE "default",
+      "sess" json NOT NULL,
+      "expire" timestamp(6) NOT NULL,
+      CONSTRAINT "user_sessions_pkey" PRIMARY KEY ("sid")
+    ) WITH (OIDS=FALSE);
+    CREATE INDEX IF NOT EXISTS "IDX_user_sessions_expire" ON "user_sessions" ("expire");
+  `);
+}
 
 const app: Express = express();
 
@@ -14,28 +30,44 @@ app.use(
     logger,
     serializers: {
       req(req) {
-        return {
-          id: req.id,
-          method: req.method,
-          url: req.url?.split("?")[0],
-        };
+        return { id: req.id, method: req.method, url: req.url?.split("?")[0] };
       },
       res(res) {
-        return {
-          statusCode: res.statusCode,
-        };
+        return { statusCode: res.statusCode };
       },
     },
   }),
 );
 
-app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
-
 app.use(cors({ credentials: true, origin: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use(clerkMiddleware());
+const isProd = process.env.NODE_ENV === "production";
+app.set("trust proxy", 1);
+
+const PgSession = connectPgSimple(session);
+app.use(
+  session({
+    name: "sid",
+    store: new PgSession({
+      pool,
+      tableName: "user_sessions",
+      createTableIfMissing: false,
+    }),
+    secret: process.env.SESSION_SECRET || "stitching-erp-dev-secret-change-me",
+    resave: false,
+    saveUninitialized: false,
+    rolling: true,
+    cookie: {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: isProd,
+      maxAge: 1000 * 60 * 60 * 24 * 30,
+    },
+  }),
+);
+
 app.use(attachUser);
 
 app.use("/api", router);
@@ -55,5 +87,11 @@ app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
   }
   res.status(500).json({ error: "Internal server error" });
 });
+
+ensureSessionTable()
+  .then(() => seedDefaultUsersIfEmpty())
+  .catch((err) => {
+    logger.error({ err }, "Failed to initialize auth");
+  });
 
 export default app;

@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { requireAuth, requireAdmin } from "../middlewares/auth";
+import authRouter from "./auth";
 import healthRouter from "./health";
 import articlesRouter from "./articles";
 import componentsRouter from "./components";
@@ -23,20 +24,7 @@ const router: IRouter = Router();
 
 // Public
 router.use(healthRouter);
-
-// Provide /me so client can know its role
-router.get("/me", (req, res) => {
-  if (!req.userId) {
-    res.json({ signedIn: false });
-    return;
-  }
-  res.json({
-    signedIn: true,
-    userId: req.userId,
-    email: req.userEmail,
-    role: req.userRole || "management",
-  });
-});
+router.use(authRouter);
 
 // Authenticated routes
 router.use(requireAuth);
