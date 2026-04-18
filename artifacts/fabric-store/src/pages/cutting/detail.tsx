@@ -90,6 +90,10 @@ export default function CuttingDetail() {
   const [assignDialog, setAssignDialog] = useState(false);
   const [completeDialog, setCompleteDialog] = useState<number | null>(null);
   const [handoverDialog, setHandoverDialog] = useState<number | null>(null);
+  const [bulkHandoverDialog, setBulkHandoverDialog] = useState(false);
+  const [bulkSelected, setBulkSelected] = useState<Record<number, boolean>>({});
+  const [bulkHandover, setBulkHandover] = useState<{ status: "with_cutter" | "returned_to_store" | "received_by_next"; receivedBy: string }>({ status: "received_by_next", receivedBy: "" });
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
   const { toast } = useToast();
 
   const [masterId, setMasterId] = useState("");
@@ -224,6 +228,40 @@ export default function CuttingDetail() {
     } catch (e: unknown) {
       toast({ title: "Error", description: e instanceof Error ? e.message : "Failed", variant: "destructive" });
     }
+  };
+
+  const openBulkHandover = () => {
+    if (!job) return;
+    const sel: Record<number, boolean> = {};
+    for (const a of job.assignments) {
+      if (a.status === "completed" && a.handoverStatus !== "received_by_next") sel[a.id] = true;
+    }
+    setBulkSelected(sel);
+    setBulkHandover({ status: "received_by_next", receivedBy: "" });
+    setBulkHandoverDialog(true);
+  };
+
+  const handleBulkHandover = async () => {
+    const ids = Object.entries(bulkSelected).filter(([, v]) => v).map(([k]) => Number(k));
+    if (ids.length === 0) { toast({ title: "Select at least one component", variant: "destructive" }); return; }
+    if (bulkHandover.status === "received_by_next" && !bulkHandover.receivedBy.trim()) {
+      toast({ title: "Enter receiver name", variant: "destructive" }); return;
+    }
+    setBulkSubmitting(true);
+    let ok = 0, fail = 0;
+    for (const id of ids) {
+      try {
+        await apiPatch(`/cutting/assignments/${id}/handover`, {
+          handoverStatus: bulkHandover.status,
+          receivedBy: bulkHandover.status === "received_by_next" ? bulkHandover.receivedBy : null,
+        });
+        ok++;
+      } catch { fail++; }
+    }
+    setBulkSubmitting(false);
+    setBulkHandoverDialog(false);
+    toast({ title: `Handover updated: ${ok} done${fail ? `, ${fail} failed` : ""}` });
+    fetchJob();
   };
 
   const handleDeleteAssignment = async (assignmentId: number) => {
@@ -428,6 +466,12 @@ ${Object.keys(sizesAggregated).length > 0 ? `
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Master Assignments</CardTitle>
+          <div className="flex gap-2">
+            {job.assignments.some(a => a.status === "completed" && a.handoverStatus !== "received_by_next") && (
+              <Button size="sm" variant="outline" onClick={openBulkHandover}>
+                <Send className="mr-2 h-4 w-4 text-blue-600" /> Handover Pending ({job.assignments.filter(a => a.status === "completed" && a.handoverStatus !== "received_by_next").length})
+              </Button>
+            )}
           {job.status !== "completed" && job.status !== "cancelled" && (
             <Dialog open={assignDialog} onOpenChange={(o) => o ? openAssign() : setAssignDialog(false)}>
               <DialogTrigger asChild><Button size="sm" onClick={openAssign}><Plus className="mr-2 h-4 w-4" /> Assign Master</Button></DialogTrigger>
@@ -537,6 +581,7 @@ ${Object.keys(sizesAggregated).length > 0 ? `
               </DialogContent>
             </Dialog>
           )}
+          </div>
         </CardHeader>
         <CardContent>
           {!job.assignments?.length ? (
@@ -635,6 +680,70 @@ ${Object.keys(sizesAggregated).length > 0 ? `
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={bulkHandoverDialog} onOpenChange={setBulkHandoverDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Handover Cut Pieces — All Components</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+            <p className="text-sm text-muted-foreground">
+              Select which components to hand over together. All selected will get the same status & receiver.
+            </p>
+
+            <div className="space-y-2 border rounded-lg p-3">
+              {job.assignments
+                .filter(a => a.status === "completed" && a.handoverStatus !== "received_by_next")
+                .map(a => (
+                  <label key={a.id} className="flex items-center gap-3 p-2 rounded hover:bg-muted/50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={!!bulkSelected[a.id]}
+                      onChange={(e) => setBulkSelected({ ...bulkSelected, [a.id]: e.target.checked })}
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium text-sm">{a.componentName}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {a.masterName} · <span className="font-mono">{a.piecesCut || 0} pcs cut</span> · {HANDOVER_LABEL[a.handoverStatus]}
+                      </div>
+                    </div>
+                  </label>
+                ))}
+            </div>
+
+            <div>
+              <Label>Where are the cut pieces?</Label>
+              <Select
+                value={bulkHandover.status}
+                onValueChange={(v: typeof bulkHandover.status) => setBulkHandover({ ...bulkHandover, status: v })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="with_cutter">Still with Cutter</SelectItem>
+                  <SelectItem value="returned_to_store">Returned to Store</SelectItem>
+                  <SelectItem value="received_by_next">Received by Next Stage (Stitching)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {bulkHandover.status === "received_by_next" && (
+              <div>
+                <Label>Received By *</Label>
+                <Input
+                  placeholder="Receiver name (e.g. Stitching Master / Storekeeper)"
+                  value={bulkHandover.receivedBy}
+                  onChange={(e) => setBulkHandover({ ...bulkHandover, receivedBy: e.target.value })}
+                />
+              </div>
+            )}
+
+            <Button className="w-full" onClick={handleBulkHandover} disabled={bulkSubmitting}>
+              {bulkSubmitting ? "Updating..." : `Handover ${Object.values(bulkSelected).filter(Boolean).length} Component(s)`}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
