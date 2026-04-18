@@ -61,6 +61,8 @@ export default function ArticleTracker() {
     subtitle: `${article.articleCode} — ${article.articleName}`,
     jobNumber: article.id,
     date: new Date().toLocaleDateString(),
+    qrData: `${window.location.origin}/articles/${article.id}/track`,
+    qrLabel: "Scan to track production",
     sections: [
       {
         heading: "Article Info",

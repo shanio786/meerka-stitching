@@ -218,7 +218,14 @@ export default function StitchingJobs() {
                     <TableCell><div className="font-medium">{j.articleName}</div><div className="text-xs text-muted-foreground">{j.articleCode}</div></TableCell>
                     <TableCell>{j.supervisorName}</TableCell>
                     <TableCell>{format(new Date(j.jobDate), "MMM d, yyyy")}</TableCell>
-                    <TableCell><Badge variant={j.status === "completed" ? "default" : "secondary"}>{j.status.replace("_", " ")}</Badge></TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant={j.status === "completed" ? "default" : "secondary"}>{j.status.replace("_", " ")}</Badge>
+                        {j.status !== "completed" && j.status !== "cancelled" && (Date.now() - new Date(j.jobDate).getTime()) > 86400000 && (
+                          <Badge variant="destructive" className="text-[10px]" title="Pending more than 24 hours">⚠ Stuck</Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right"><Link href={`/stitching/${j.id}`}><Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button></Link></TableCell>
                   </TableRow>
                 ))}

@@ -30,6 +30,8 @@ export default function ArticlesList() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [partTypeFilter, setPartTypeFilter] = useState("");
+  const [collectionFilter, setCollectionFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -65,6 +67,9 @@ export default function ArticlesList() {
 
   const filtered = articles.filter(a => {
     if (partTypeFilter && partTypeFilter !== "all" && a.partType !== partTypeFilter) return false;
+    if (collectionFilter !== "all" && (a.collectionName || "") !== collectionFilter) return false;
+    if (statusFilter === "active" && !a.isActive) return false;
+    if (statusFilter === "inactive" && a.isActive) return false;
     return true;
   });
 
@@ -98,12 +103,31 @@ export default function ArticlesList() {
               </SelectContent>
             </Select>
             <Select value={partTypeFilter} onValueChange={setPartTypeFilter}>
-              <SelectTrigger className="w-[160px]">
+              <SelectTrigger className="w-[140px]">
                 <SelectValue placeholder="Work Type" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
                 {partTypes.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={collectionFilter} onValueChange={setCollectionFilter}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Collection" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Collections</SelectItem>
+                {collections.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[130px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
           </div>

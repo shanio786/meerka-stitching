@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
-import { Printer } from "lucide-react";
+import { Printer, Download } from "lucide-react";
+import QRCode from "qrcode";
 
 export type JobCardSection = {
   heading: string;
@@ -21,11 +22,23 @@ export type JobCardData = {
   sections?: JobCardSection[];
   tables?: JobCardTable[];
   footerNote?: string;
+  qrData?: string;
+  qrLabel?: string;
 };
 
-export function printJobCard(data: JobCardData) {
+async function buildQrDataUrl(data?: string): Promise<string | null> {
+  if (!data) return null;
+  try {
+    return await QRCode.toDataURL(data, { margin: 1, width: 140, errorCorrectionLevel: "M" });
+  } catch {
+    return null;
+  }
+}
+
+export async function printJobCard(data: JobCardData, opts: { autoPrint?: boolean } = { autoPrint: true }) {
   const w = window.open("", "_blank", "width=900,height=900");
   if (!w) return;
+  const qrDataUrl = await buildQrDataUrl(data.qrData);
   const sectionsHtml = (data.sections || [])
     .map(
       (s) => `
@@ -59,6 +72,9 @@ export function printJobCard(data: JobCardData) {
       .header{border-bottom:2px solid #111;padding-bottom:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start}
       .header h1{margin:0;font-size:20px;letter-spacing:0.5px}
       .header h2{margin:4px 0 0;font-size:13px;color:#444;font-weight:500}
+      .qr{margin-left:16px;text-align:center}
+      .qr img{display:block;width:90px;height:90px}
+      .qrlbl{font-size:9px;color:#666;margin-top:2px}
       .meta{text-align:right;font-size:11px;color:#444}
       .meta div{margin:2px 0}
       .meta .num{font-size:14px;color:#111;font-weight:700}
@@ -86,6 +102,7 @@ export function printJobCard(data: JobCardData) {
         ${data.date ? `<div>Date: ${escapeHtml(data.date)}</div>` : ""}
         <div>Printed: ${new Date().toLocaleString()}</div>
       </div>
+      ${qrDataUrl ? `<div class="qr"><img src="${qrDataUrl}" alt="QR" /><div class="qrlbl">${escapeHtml(data.qrLabel || "Scan to track")}</div></div>` : ""}
     </div>
     ${sectionsHtml}
     ${tablesHtml}
@@ -113,7 +130,7 @@ function escapeHtml(s: string) {
 
 export function PrintJobCardButton({ data, label = "Print Job Card" }: { data: JobCardData; label?: string }) {
   return (
-    <Button variant="outline" size="sm" onClick={() => printJobCard(data)}>
+    <Button variant="outline" size="sm" onClick={() => { void printJobCard(data); }}>
       <Printer className="h-4 w-4 mr-2" />
       {label}
     </Button>

@@ -213,7 +213,14 @@ export default function OverlockButton() {
                       <TableCell className="text-center">{e.wasteQty || "-"}</TableCell>
                       <TableCell>{e.ratePerPiece ? `Rs.${e.ratePerPiece}` : "-"}</TableCell>
                       <TableCell className="font-mono">{e.totalAmount ? `Rs.${e.totalAmount.toLocaleString()}` : "-"}</TableCell>
-                      <TableCell><Badge variant={e.status === "completed" ? "default" : "secondary"}>{e.status}</Badge></TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5">
+                          <Badge variant={e.status === "completed" ? "default" : "secondary"}>{e.status}</Badge>
+                          {e.status !== "completed" && e.status !== "cancelled" && (Date.now() - new Date(e.date).getTime()) > 86400000 && (
+                            <Badge variant="destructive" className="text-[10px]" title="Pending more than 24 hours">⚠ Stuck</Badge>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
                           {e.status !== "completed" && (

@@ -163,7 +163,14 @@ export default function CuttingJobs() {
                       <div className="text-xs text-muted-foreground">{j.articleCode}</div>
                     </TableCell>
                     <TableCell>{format(new Date(j.jobDate), "MMM d, yyyy")}</TableCell>
-                    <TableCell><Badge variant={STATUS_COLORS[j.status] || "secondary"}>{j.status.replace("_", " ")}</Badge></TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant={STATUS_COLORS[j.status] || "secondary"}>{j.status.replace("_", " ")}</Badge>
+                        {j.status !== "completed" && j.status !== "cancelled" && (Date.now() - new Date(j.jobDate).getTime()) > 86400000 && (
+                          <Badge variant="destructive" className="text-[10px]" title="Pending more than 24 hours">⚠ Stuck</Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right">
                       <Link href={`/cutting/${j.id}`}><Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button></Link>
                     </TableCell>
