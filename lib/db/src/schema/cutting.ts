@@ -1,4 +1,5 @@
-import { pgTable, text, serial, timestamp, doublePrecision, integer, pgEnum, date } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, doublePrecision, integer, pgEnum, check } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { articlesTable } from "./articles";
 import { mastersTable } from "./masters";
 
@@ -50,7 +51,10 @@ export const cuttingAssignmentsTable = pgTable("cutting_assignments", {
   receivedBy: text("received_by"),
   handoverDate: timestamp("handover_date", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => ({
+  consumedNonNeg: check("pieces_consumed_non_negative", sql`${t.piecesConsumed} >= 0`),
+  consumedWithinCut: check("pieces_consumed_within_cut", sql`${t.piecesCut} IS NULL OR ${t.piecesConsumed} <= ${t.piecesCut}`),
+}));
 
 export const cuttingSizeBreakdownTable = pgTable("cutting_size_breakdown", {
   id: serial("id").primaryKey(),

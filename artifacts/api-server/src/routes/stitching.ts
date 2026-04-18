@@ -144,20 +144,11 @@ router.post("/stitching/assignments", async (req, res): Promise<void> => {
   if (Array.isArray(items) && items.length > 0) {
     if (!jobId || !masterId) { res.status(400).json({ error: "Job and master are required" }); return; }
 
-    // Validate availability per cuttingAssignmentId
+    // Light pre-validation (atomic guarded update below is the source of truth)
     for (const it of items) {
       if (!it.componentName || !it.quantityGiven || it.quantityGiven <= 0) {
         res.status(400).json({ error: `Invalid quantity for ${it.componentName || "row"}` });
         return;
-      }
-      if (it.cuttingAssignmentId) {
-        const [src] = await db.select().from(cuttingAssignmentsTable).where(eq(cuttingAssignmentsTable.id, it.cuttingAssignmentId));
-        if (!src) { res.status(400).json({ error: `Cutting source not found for ${it.componentName}` }); return; }
-        const available = (src.piecesCut || 0) - (src.piecesConsumed || 0);
-        if (it.quantityGiven > available) {
-          res.status(400).json({ error: `Only ${available} pcs available for ${it.componentName}` });
-          return;
-        }
       }
     }
 
@@ -167,13 +158,32 @@ router.post("/stitching/assignments", async (req, res): Promise<void> => {
       const componentNames = items.map((i: { componentName: string }) => i.componentName).join(", ");
 
       for (const it of items) {
+        const qty = Number(it.quantityGiven);
+
+        // Atomic, race-safe consumption: only succeeds if pieces still available
+        // AND source is completed + handed over to next stage.
+        if (it.cuttingAssignmentId) {
+          const updated = await tx.update(cuttingAssignmentsTable).set({
+            piecesConsumed: sql`${cuttingAssignmentsTable.piecesConsumed} + ${qty}`,
+          }).where(and(
+            eq(cuttingAssignmentsTable.id, it.cuttingAssignmentId),
+            eq(cuttingAssignmentsTable.status, "completed"),
+            eq(cuttingAssignmentsTable.handoverStatus, "received_by_next"),
+            sql`COALESCE(${cuttingAssignmentsTable.piecesCut}, 0) - COALESCE(${cuttingAssignmentsTable.piecesConsumed}, 0) >= ${qty}`,
+          )).returning({ id: cuttingAssignmentsTable.id });
+
+          if (updated.length === 0) {
+            throw new Error(`Cannot consume ${qty} pcs of "${it.componentName}" — source not available or not handed over (try refresh).`);
+          }
+        }
+
         const useSuitRate = ratePerSuit && !suitRateApplied;
         const [a] = await tx.insert(stitchingAssignmentsTable).values({
           jobId, masterId,
           cuttingAssignmentId: it.cuttingAssignmentId || null,
           componentName: it.componentName,
           size: it.size || null,
-          quantityGiven: Number(it.quantityGiven),
+          quantityGiven: qty,
           ratePerPiece: ratePerSuit ? null : (it.ratePerPiece ? Number(it.ratePerPiece) : null),
           ratePerSuit: useSuitRate ? Number(ratePerSuit) : null,
           notes: useSuitRate
@@ -182,12 +192,6 @@ router.post("/stitching/assignments", async (req, res): Promise<void> => {
         }).returning();
         if (useSuitRate) suitRateApplied = true;
         created.push(a);
-
-        if (it.cuttingAssignmentId) {
-          await tx.update(cuttingAssignmentsTable).set({
-            piecesConsumed: sql`${cuttingAssignmentsTable.piecesConsumed} + ${Number(it.quantityGiven)}`,
-          }).where(eq(cuttingAssignmentsTable.id, it.cuttingAssignmentId));
-        }
       }
 
       // Backfill cuttingJobId on stitching job from any source
