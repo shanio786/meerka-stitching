@@ -16,6 +16,7 @@ import { format } from "date-fns";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { PendingPoolCard, type PendingRow } from "@/components/PendingPoolCard";
 import { printJobCard } from "@/components/JobCard";
+import { SizeBreakdownRows, emptyBreakdownRow, validBreakdownRows, type BreakdownRow } from "@/components/SizeBreakdownRows";
 
 interface OBEntry {
   id: number;
@@ -43,7 +44,7 @@ interface OBEntry {
 interface ArticleOption { id: number; articleCode: string; articleName: string; }
 interface MasterOption { id: number; name: string; masterType: string; }
 
-const emptyForm = { articleId: "", taskType: "overlock", masterId: "", componentName: "", size: "", receivedFrom: "", receivedQty: "", ratePerPiece: "", receivedBy: "", notes: "", date: new Date().toISOString().split("T")[0] };
+const emptyForm = { articleId: "", taskType: "overlock", masterId: "", receivedFrom: "", receivedBy: "", notes: "", date: new Date().toISOString().split("T")[0] };
 
 export default function OverlockButton() {
   const [entries, setEntries] = useState<OBEntry[]>([]);
@@ -59,6 +60,7 @@ export default function OverlockButton() {
   const { toast } = useToast();
 
   const [form, setForm] = useState(emptyForm);
+  const [breakdown, setBreakdown] = useState<BreakdownRow[]>([emptyBreakdownRow()]);
   const [completeForm, setCompleteForm] = useState({ completedQty: "", wasteQty: "", wasteReason: "" });
 
   const fetchEntries = async () => {
@@ -83,32 +85,43 @@ export default function OverlockButton() {
     setForm({
       ...emptyForm,
       articleId: String(row.articleId),
-      componentName: row.componentName || "",
-      size: row.size || "",
-      receivedQty: String(row.available),
       receivedFrom: row.masterName ? `Stitching - ${row.masterName}` : "Stitching Dept",
     });
+    setBreakdown([emptyBreakdownRow({
+      component: row.componentName || "",
+      size: row.size || "",
+      qty: String(row.available),
+    })]);
     setDialogOpen(true);
   };
 
   const handleCreate = async () => {
-    if (!form.articleId || !form.masterId || !form.receivedQty) { toast({ title: "Fill required fields", variant: "destructive" }); return; }
-    try {
-      await apiPost("/overlock-button", {
+    const rows = validBreakdownRows(breakdown);
+    if (!form.articleId || !form.masterId) { toast({ title: "Article and Master required", variant: "destructive" }); return; }
+    if (rows.length === 0) { toast({ title: "Add at least one size with quantity", variant: "destructive" }); return; }
+    const results = await Promise.allSettled(rows.map(r =>
+      apiPost("/overlock-button", {
         articleId: parseInt(form.articleId), taskType: form.taskType, masterId: parseInt(form.masterId),
-        componentName: form.componentName || undefined, size: form.size || undefined,
+        componentName: r.component || undefined, size: r.size || undefined,
         receivedFrom: form.receivedFrom || undefined,
-        receivedQty: parseInt(form.receivedQty), ratePerPiece: form.ratePerPiece ? parseFloat(form.ratePerPiece) : undefined,
+        receivedQty: parseInt(r.qty), ratePerPiece: r.rate ? parseFloat(r.rate) : undefined,
         receivedBy: form.receivedBy, notes: form.notes, date: form.date,
-      });
-      toast({ title: "Entry added" });
+      })
+    ));
+    const ok = results.filter(r => r.status === "fulfilled").length;
+    const failed = results.length - ok;
+    fetchEntries();
+    setPoolKey(k => k + 1);
+    if (failed === 0) {
+      toast({ title: `${ok} ${ok === 1 ? "entry" : "entries"} added` });
       setDialogOpen(false);
       setForm(emptyForm);
-      fetchEntries();
-      setPoolKey(k => k + 1);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Failed to create";
-      toast({ title: "Error", description: msg, variant: "destructive" });
+      setBreakdown([emptyBreakdownRow()]);
+    } else {
+      const firstErr = results.find(r => r.status === "rejected") as PromiseRejectedResult | undefined;
+      const msg = firstErr && firstErr.reason instanceof Error ? firstErr.reason.message : "Some entries failed";
+      toast({ title: `${ok} added, ${failed} failed`, description: msg, variant: "destructive" });
+      setBreakdown(rows.filter((_, i) => results[i].status === "rejected").map(r => ({ ...r })));
     }
   };
 
@@ -176,16 +189,19 @@ export default function OverlockButton() {
   return (
     <div className="space-y-6">
       <PageHeader title="Overlock / Button" description="Receive pieces from stitching by size and component, then mark complete" actions={
-        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setForm(emptyForm); }}>
+        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setForm(emptyForm); setBreakdown([emptyBreakdownRow()]); } }}>
           <DialogTrigger asChild><Button data-testid="button-new-entry"><Plus className="mr-2 h-4 w-4" /> New Entry</Button></DialogTrigger>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-2xl">
             <DialogHeader><DialogTitle>Receive Pieces (Overlock/Button)</DialogTitle></DialogHeader>
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-              <div><Label>Task Type *</Label>
-                <Select value={form.taskType} onValueChange={v => setForm({ ...form, taskType: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="overlock">Overlock</SelectItem><SelectItem value="button">Button</SelectItem></SelectContent>
-                </Select>
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Task Type *</Label>
+                  <Select value={form.taskType} onValueChange={v => setForm({ ...form, taskType: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="overlock">Overlock</SelectItem><SelectItem value="button">Button</SelectItem></SelectContent>
+                  </Select>
+                </div>
+                <div><Label>Date *</Label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
               </div>
               <div><Label>Article *</Label>
                 <SearchableSelect options={articleOptions} value={form.articleId} onValueChange={v => setForm({ ...form, articleId: v })} placeholder="Search & select article" searchPlaceholder="Type article name or code..." />
@@ -193,26 +209,15 @@ export default function OverlockButton() {
               <div><Label>Master *</Label>
                 <SearchableSelect options={masterOptions} value={form.masterId} onValueChange={v => setForm({ ...form, masterId: v })} placeholder="Search & select master" searchPlaceholder="Search master..." />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Component</Label><Input value={form.componentName} onChange={e => setForm({ ...form, componentName: e.target.value })} placeholder="e.g. Front, Sleeve" /></div>
-                <div><Label>Size</Label>
-                  <Select value={form.size} onValueChange={v => setForm({ ...form, size: v })}>
-                    <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
-                    <SelectContent>{["XS", "S", "M", "L", "XL", "XXL"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Received Qty *</Label><Input type="number" value={form.receivedQty} onChange={e => setForm({ ...form, receivedQty: e.target.value })} /></div>
-                <div><Label>Rate/Piece</Label><Input type="number" value={form.ratePerPiece} onChange={e => setForm({ ...form, ratePerPiece: e.target.value })} /></div>
-              </div>
+
+              <SizeBreakdownRows rows={breakdown} onChange={setBreakdown} qtyLabel="Received" />
+
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Received By</Label><Input value={form.receivedBy} onChange={e => setForm({ ...form, receivedBy: e.target.value })} placeholder="Person who received" /></div>
                 <div><Label>Received From</Label><Input value={form.receivedFrom} onChange={e => setForm({ ...form, receivedFrom: e.target.value })} placeholder="e.g. Stitching - Master name" /></div>
               </div>
-              <div><Label>Date *</Label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
               <div><Label>Notes</Label><Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
-              <Button className="w-full" onClick={handleCreate}>Add Entry</Button>
+              <Button className="w-full" onClick={handleCreate}>Add Entries</Button>
             </div>
           </DialogContent>
         </Dialog>

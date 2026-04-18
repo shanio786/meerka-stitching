@@ -16,6 +16,7 @@ import { format } from "date-fns";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { PendingPoolCard, type PendingRow } from "@/components/PendingPoolCard";
 import { printJobCard } from "@/components/JobCard";
+import { SizeBreakdownRows, emptyBreakdownRow, validBreakdownRows, type BreakdownRow } from "@/components/SizeBreakdownRows";
 
 interface QCEntry {
   id: number;
@@ -39,7 +40,7 @@ interface QCEntry {
 interface ArticleOption { id: number; articleCode: string; articleName: string; }
 interface MasterOption { id: number; name: string; masterType: string; }
 
-const emptyForm = { articleId: "", inspectorName: "", masterId: "", componentName: "", size: "", receivedFrom: "", receivedQty: "", passedQty: "", rejectedQty: "", rejectionReason: "", notes: "", date: new Date().toISOString().split("T")[0] };
+const emptyForm = { articleId: "", inspectorName: "", masterId: "", receivedFrom: "", rejectionReason: "", notes: "", date: new Date().toISOString().split("T")[0] };
 
 export default function QCEntries() {
   const [entries, setEntries] = useState<QCEntry[]>([]);
@@ -52,6 +53,7 @@ export default function QCEntries() {
   const { toast } = useToast();
 
   const [form, setForm] = useState(emptyForm);
+  const [breakdown, setBreakdown] = useState<BreakdownRow[]>([emptyBreakdownRow()]);
 
   const fetchEntries = async () => {
     setLoading(true);
@@ -72,33 +74,60 @@ export default function QCEntries() {
     setForm({
       ...emptyForm,
       articleId: String(row.articleId),
-      componentName: row.componentName || "",
-      size: row.size || "",
-      receivedQty: String(row.available),
       receivedFrom: row.masterName ? `Overlock/Button - ${row.masterName}` : "Overlock/Button Dept",
     });
+    setBreakdown([emptyBreakdownRow({
+      component: row.componentName || "",
+      size: row.size || "",
+      qty: String(row.available),
+      passed: String(row.available),
+      rejected: "0",
+    })]);
     setDialogOpen(true);
   };
 
   const handleCreate = async () => {
-    if (!form.articleId || !form.inspectorName || !form.receivedQty) { toast({ title: "Fill required fields", variant: "destructive" }); return; }
-    try {
-      await apiPost("/qc", {
+    const rows = validBreakdownRows(breakdown);
+    if (!form.articleId || !form.inspectorName) { toast({ title: "Article and Inspector required", variant: "destructive" }); return; }
+    if (rows.length === 0) { toast({ title: "Add at least one size with quantity", variant: "destructive" }); return; }
+
+    const normalized = rows.map(r => {
+      const recv = parseInt(r.qty) || 0;
+      const rejected = parseInt(r.rejected || "0") || 0;
+      const passedRaw = (r.passed ?? "").trim();
+      const passed = passedRaw === "" ? Math.max(0, recv - rejected) : (parseInt(passedRaw) || 0);
+      return { r, recv, passed, rejected };
+    });
+    const invalid = normalized.find(({ recv, passed, rejected }) => passed + rejected > recv || passed < 0 || rejected < 0);
+    if (invalid) {
+      toast({ title: "Invalid QC counts", description: "Passed + Rejected cannot exceed Received in any row.", variant: "destructive" });
+      return;
+    }
+
+    const results = await Promise.allSettled(normalized.map(({ r, recv, passed, rejected }) =>
+      apiPost("/qc", {
         articleId: parseInt(form.articleId), inspectorName: form.inspectorName,
         masterId: form.masterId ? parseInt(form.masterId) : undefined,
-        componentName: form.componentName || undefined, size: form.size || undefined,
+        componentName: r.component || undefined, size: r.size || undefined,
         receivedFrom: form.receivedFrom || undefined,
-        receivedQty: parseInt(form.receivedQty), passedQty: parseInt(form.passedQty || "0"),
-        rejectedQty: parseInt(form.rejectedQty || "0"), rejectionReason: form.rejectionReason, notes: form.notes, date: form.date,
-      });
-      toast({ title: "QC entry added" });
+        receivedQty: recv, passedQty: passed, rejectedQty: rejected,
+        rejectionReason: form.rejectionReason, notes: form.notes, date: form.date,
+      })
+    ));
+    const ok = results.filter(x => x.status === "fulfilled").length;
+    const failed = results.length - ok;
+    fetchEntries();
+    setPoolKey(k => k + 1);
+    if (failed === 0) {
+      toast({ title: `${ok} QC ${ok === 1 ? "entry" : "entries"} added` });
       setDialogOpen(false);
       setForm(emptyForm);
-      fetchEntries();
-      setPoolKey(k => k + 1);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Failed to create";
-      toast({ title: "Error", description: msg, variant: "destructive" });
+      setBreakdown([emptyBreakdownRow()]);
+    } else {
+      const firstErr = results.find(x => x.status === "rejected") as PromiseRejectedResult | undefined;
+      const msg = firstErr && firstErr.reason instanceof Error ? firstErr.reason.message : "Some entries failed";
+      toast({ title: `${ok} added, ${failed} failed`, description: msg, variant: "destructive" });
+      setBreakdown(rows.filter((_, i) => results[i].status === "rejected").map(r => ({ ...r })));
     }
   };
 
@@ -148,13 +177,16 @@ export default function QCEntries() {
   return (
     <div className="space-y-6">
       <PageHeader title="Quality Control" description="Overlock/Button ke baad pieces inspect karo — passed/rejected ka record rakhein" actions={
-        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setForm(emptyForm); }}>
+        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setForm(emptyForm); setBreakdown([emptyBreakdownRow()]); } }}>
           <DialogTrigger asChild><Button data-testid="button-new-qc"><Plus className="mr-2 h-4 w-4" /> New QC Entry</Button></DialogTrigger>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-3xl">
             <DialogHeader><DialogTitle>Add QC Entry</DialogTitle></DialogHeader>
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-              <div><Label>Article *</Label>
-                <SearchableSelect options={articleOptions} value={form.articleId} onValueChange={v => setForm({ ...form, articleId: v })} placeholder="Search & select article" searchPlaceholder="Type article name or code..." />
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Article *</Label>
+                  <SearchableSelect options={articleOptions} value={form.articleId} onValueChange={v => setForm({ ...form, articleId: v })} placeholder="Search & select article" searchPlaceholder="Type article name or code..." />
+                </div>
+                <div><Label>Date *</Label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Inspector Name *</Label><Input value={form.inspectorName} onChange={e => setForm({ ...form, inspectorName: e.target.value })} /></div>
@@ -162,25 +194,13 @@ export default function QCEntries() {
                   <SearchableSelect options={masterOptions} value={form.masterId} onValueChange={v => setForm({ ...form, masterId: v })} placeholder="Select master" searchPlaceholder="Search master..." />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Component</Label><Input value={form.componentName} onChange={e => setForm({ ...form, componentName: e.target.value })} placeholder="e.g. Front" /></div>
-                <div><Label>Size</Label>
-                  <Select value={form.size} onValueChange={v => setForm({ ...form, size: v })}>
-                    <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
-                    <SelectContent>{["XS", "S", "M", "L", "XL", "XXL"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div><Label>Received *</Label><Input type="number" value={form.receivedQty} onChange={e => setForm({ ...form, receivedQty: e.target.value })} /></div>
-                <div><Label>Passed</Label><Input type="number" value={form.passedQty} onChange={e => setForm({ ...form, passedQty: e.target.value })} /></div>
-                <div><Label>Rejected</Label><Input type="number" value={form.rejectedQty} onChange={e => setForm({ ...form, rejectedQty: e.target.value })} /></div>
-              </div>
+
+              <SizeBreakdownRows rows={breakdown} onChange={setBreakdown} qtyLabel="Received" showRate={false} showPassedRejected={true} />
+
               <div><Label>Received From</Label><Input value={form.receivedFrom} onChange={e => setForm({ ...form, receivedFrom: e.target.value })} placeholder="e.g. Overlock - Master name" /></div>
               <div><Label>Rejection Reason</Label><Input value={form.rejectionReason} onChange={e => setForm({ ...form, rejectionReason: e.target.value })} placeholder="e.g. Uneven stitch, thread loose" /></div>
-              <div><Label>Date *</Label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
               <div><Label>Notes</Label><Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
-              <Button className="w-full" onClick={handleCreate}>Add QC Entry</Button>
+              <Button className="w-full" onClick={handleCreate}>Add QC Entries</Button>
             </div>
           </DialogContent>
         </Dialog>
