@@ -62,6 +62,7 @@ interface PendingItem {
   handoverDate: string | null;
 }
 
+interface SizeQty { size: string; quantity: string; }
 interface ComponentRow {
   selected: boolean;
   cuttingAssignmentId: number;
@@ -69,9 +70,11 @@ interface ComponentRow {
   cutterMasterName: string;
   cuttingJobId: number;
   available: number;
-  quantity: string;
+  sizes: SizeQty[];
   ratePerPiece: string;
 }
+
+const SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "XXL", "Free"];
 
 export default function StitchingDetail() {
   const { id } = useParams<{ id: string }>();
@@ -88,7 +91,6 @@ export default function StitchingDetail() {
   const [rateMode, setRateMode] = useState<"per_component" | "per_suit">("per_component");
   const [ratePerSuit, setRatePerSuit] = useState("");
   const [assignNotes, setAssignNotes] = useState("");
-  const [size, setSize] = useState("");
   const [rows, setRows] = useState<ComponentRow[]>([]);
 
   const [completeForm, setCompleteForm] = useState({ piecesCompleted: "", piecesWaste: "", wasteReason: "" });
@@ -116,14 +118,13 @@ export default function StitchingDetail() {
       cutterMasterName: p.cutterMasterName,
       cuttingJobId: p.cuttingJobId,
       available: p.available,
-      quantity: String(p.available),
+      sizes: [{ size: "", quantity: String(p.available) }],
       ratePerPiece: "",
     })));
     setMasterId("");
     setRateMode("per_component");
     setRatePerSuit("");
     setAssignNotes("");
-    setSize("");
     setAssignDialog(true);
   };
 
@@ -131,18 +132,42 @@ export default function StitchingDetail() {
     setRows((rs) => rs.map((r, idx) => idx === i ? { ...r, ...patch } : r));
   };
 
+  const updateSize = (rowIdx: number, sizeIdx: number, patch: Partial<SizeQty>) => {
+    setRows((rs) => rs.map((r, ri) => ri !== rowIdx ? r : {
+      ...r,
+      sizes: r.sizes.map((s, si) => si === sizeIdx ? { ...s, ...patch } : s),
+    }));
+  };
+  const addSize = (rowIdx: number) => {
+    setRows((rs) => rs.map((r, ri) => ri !== rowIdx ? r : { ...r, sizes: [...r.sizes, { size: "", quantity: "" }] }));
+  };
+  const removeSize = (rowIdx: number, sizeIdx: number) => {
+    setRows((rs) => rs.map((r, ri) => ri !== rowIdx ? r : { ...r, sizes: r.sizes.filter((_, si) => si !== sizeIdx) }));
+  };
+
+  const sumSizes = (r: ComponentRow): number =>
+    r.sizes.reduce((s, x) => s + (parseInt(x.quantity) || 0), 0);
+
   const validateRow = (r: ComponentRow): string | null => {
     if (!r.selected) return null;
-    const q = parseInt(r.quantity);
-    if (isNaN(q) || q <= 0) return "Invalid quantity";
-    if (q > r.available) return `Only ${r.available} pcs available`;
+    const total = sumSizes(r);
+    if (total <= 0) return "Enter quantity for at least one size";
+    if (total > r.available) return `Total ${total} exceeds available ${r.available}`;
+    const seen = new Set<string>();
+    for (const s of r.sizes) {
+      const q = parseInt(s.quantity);
+      if (isNaN(q) || q <= 0) continue;
+      const key = (s.size || "_all_").toLowerCase();
+      if (seen.has(key)) return `Duplicate size: ${s.size || "(blank)"}`;
+      seen.add(key);
+    }
     return null;
   };
 
   const warnRow = (r: ComponentRow): string | null => {
     if (!r.selected) return null;
-    const q = parseInt(r.quantity);
-    if (!isNaN(q) && q < r.available) return `Taking ${q} of ${r.available} — rest stays in pending pool.`;
+    const total = sumSizes(r);
+    if (total > 0 && total < r.available) return `Taking ${total} of ${r.available} — rest stays in pending pool.`;
     return null;
   };
 
@@ -157,13 +182,17 @@ export default function StitchingDetail() {
     if (rateMode === "per_suit" && !ratePerSuit) { toast({ title: "Enter rate per suit", variant: "destructive" }); return; }
 
     try {
-      const items = selected.map((r) => ({
-        cuttingAssignmentId: r.cuttingAssignmentId,
-        componentName: r.componentName,
-        size: size || null,
-        quantityGiven: parseInt(r.quantity),
-        ratePerPiece: rateMode === "per_component" && r.ratePerPiece ? parseFloat(r.ratePerPiece) : null,
-      }));
+      const items = selected.flatMap((r) =>
+        r.sizes
+          .filter((s) => parseInt(s.quantity) > 0)
+          .map((s) => ({
+            cuttingAssignmentId: r.cuttingAssignmentId,
+            componentName: r.componentName,
+            size: s.size || null,
+            quantityGiven: parseInt(s.quantity),
+            ratePerPiece: rateMode === "per_component" && r.ratePerPiece ? parseFloat(r.ratePerPiece) : null,
+          }))
+      );
       await apiPost("/stitching/assignments", {
         jobId: parseInt(id!), masterId: parseInt(masterId), items,
         ratePerSuit: rateMode === "per_suit" ? parseFloat(ratePerSuit) : null,
@@ -299,47 +328,70 @@ export default function StitchingDetail() {
                         <span className="text-xs">Mark cutting assignments as "Received by Next" to make them appear here.</span>
                       </div>
                     ) : (
-                      <div className="border rounded-md overflow-hidden">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="w-12"></TableHead>
-                              <TableHead>Component</TableHead>
-                              <TableHead>From Cutter</TableHead>
-                              <TableHead className="text-right">Available</TableHead>
-                              <TableHead className="w-28">Take</TableHead>
-                              <TableHead className="w-28">Rate/Pc</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {rows.map((r, i) => {
-                              const err = validateRow(r);
-                              const warn = warnRow(r);
-                              return (
-                                <>
-                                  <TableRow key={i}>
-                                    <TableCell><input type="checkbox" checked={r.selected} onChange={(e) => updateRow(i, { selected: e.target.checked })} /></TableCell>
-                                    <TableCell className="font-medium">
-                                      <div>{r.componentName}</div>
-                                      <div className="text-xs text-muted-foreground">CUT-{String(r.cuttingJobId).padStart(4, "0")}</div>
-                                    </TableCell>
-                                    <TableCell className="text-sm">{r.cutterMasterName}</TableCell>
-                                    <TableCell className="text-right">{r.available}</TableCell>
-                                    <TableCell><Input type="number" disabled={!r.selected} value={r.quantity} onChange={(e) => updateRow(i, { quantity: e.target.value })} className="h-8" /></TableCell>
-                                    <TableCell><Input type="number" disabled={!r.selected || rateMode === "per_suit"} value={r.ratePerPiece} onChange={(e) => updateRow(i, { ratePerPiece: e.target.value })} placeholder={rateMode === "per_suit" ? "—" : "Rs."} className="h-8" /></TableCell>
-                                  </TableRow>
-                                  {(err || warn) && r.selected && (
-                                    <TableRow>
-                                      <TableCell colSpan={6} className={`py-1 text-xs ${err ? "text-destructive bg-destructive/5" : "text-orange-600 bg-orange-50"}`}>
-                                        <AlertTriangle className="h-3 w-3 inline mr-1" /> {err || warn}
-                                      </TableCell>
-                                    </TableRow>
+                      <div className="space-y-3">
+                        {rows.map((r, i) => {
+                          const err = validateRow(r);
+                          const warn = warnRow(r);
+                          const total = sumSizes(r);
+                          return (
+                            <div key={i} className={`border rounded-md p-3 ${r.selected ? "bg-muted/30" : ""}`}>
+                              <div className="flex items-center gap-3 mb-2">
+                                <input type="checkbox" checked={r.selected} onChange={(e) => updateRow(i, { selected: e.target.checked })} className="h-4 w-4" />
+                                <div className="flex-1">
+                                  <div className="font-medium text-sm">{r.componentName}</div>
+                                  <div className="text-xs text-muted-foreground">From {r.cutterMasterName} · CUT-{String(r.cuttingJobId).padStart(4, "0")} · Available: <span className="font-mono text-blue-600">{r.available} pcs</span></div>
+                                </div>
+                                {r.selected && (
+                                  <div className="text-sm font-mono">
+                                    Total: <span className={total > r.available ? "text-destructive" : "text-green-700"}>{total}</span>/{r.available}
+                                  </div>
+                                )}
+                                {rateMode === "per_component" && r.selected && (
+                                  <div className="w-32">
+                                    <Input type="number" value={r.ratePerPiece} onChange={(e) => updateRow(i, { ratePerPiece: e.target.value })} placeholder="Rate/Pc Rs." className="h-8" />
+                                  </div>
+                                )}
+                              </div>
+
+                              {r.selected && (
+                                <div className="ml-7 space-y-2">
+                                  <div className="text-xs font-medium text-muted-foreground">Pieces per size:</div>
+                                  {r.sizes.map((s, si) => (
+                                    <div key={si} className="flex items-center gap-2">
+                                      <Select value={s.size || "_all_"} onValueChange={(v) => updateSize(i, si, { size: v === "_all_" ? "" : v })}>
+                                        <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="_all_">All / No size</SelectItem>
+                                          {SIZE_OPTIONS.map(sz => <SelectItem key={sz} value={sz}>{sz}</SelectItem>)}
+                                        </SelectContent>
+                                      </Select>
+                                      <Input
+                                        type="number"
+                                        value={s.quantity}
+                                        onChange={(e) => updateSize(i, si, { quantity: e.target.value })}
+                                        placeholder="Pieces"
+                                        className="h-8 flex-1"
+                                      />
+                                      {r.sizes.length > 1 && (
+                                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeSize(i, si)}>
+                                          <Trash2 className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  ))}
+                                  <Button type="button" variant="outline" size="sm" onClick={() => addSize(i)}>
+                                    <Plus className="mr-1 h-3 w-3" /> Add Size
+                                  </Button>
+                                  {(err || warn) && (
+                                    <div className={`text-xs flex items-center gap-1 ${err ? "text-destructive" : "text-orange-600"}`}>
+                                      <AlertTriangle className="h-3 w-3" /> {err || warn}
+                                    </div>
                                   )}
-                                </>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -355,26 +407,10 @@ export default function StitchingDetail() {
                         </SelectContent>
                       </Select>
                     </div>
-                    {rateMode === "per_suit" ? (
+                    {rateMode === "per_suit" && (
                       <div><Label>Rate per Suit *</Label><Input type="number" value={ratePerSuit} onChange={(e) => setRatePerSuit(e.target.value)} placeholder="Rs." /></div>
-                    ) : (
-                      <div><Label>Size (optional)</Label>
-                        <Select value={size} onValueChange={setSize}>
-                          <SelectTrigger><SelectValue placeholder="All sizes" /></SelectTrigger>
-                          <SelectContent>{["XS", "S", "M", "L", "XL", "XXL"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                        </Select>
-                      </div>
                     )}
                   </div>
-
-                  {rateMode === "per_suit" && (
-                    <div><Label>Size (optional)</Label>
-                      <Select value={size} onValueChange={setSize}>
-                        <SelectTrigger><SelectValue placeholder="All sizes" /></SelectTrigger>
-                        <SelectContent>{["XS", "S", "M", "L", "XL", "XXL"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                  )}
 
                   <div><Label>Notes</Label><Input value={assignNotes} onChange={(e) => setAssignNotes(e.target.value)} /></div>
 
