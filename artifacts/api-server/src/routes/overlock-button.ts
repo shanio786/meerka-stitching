@@ -22,6 +22,7 @@ router.get("/overlock-button", async (req, res): Promise<void> => {
       masterName: mastersTable.name,
       componentName: overlockButtonEntriesTable.componentName,
       size: overlockButtonEntriesTable.size,
+      receivedFrom: overlockButtonEntriesTable.receivedFrom,
       receivedQty: overlockButtonEntriesTable.receivedQty,
       completedQty: overlockButtonEntriesTable.completedQty,
       wasteQty: overlockButtonEntriesTable.wasteQty,
@@ -45,13 +46,13 @@ router.get("/overlock-button", async (req, res): Promise<void> => {
 });
 
 router.post("/overlock-button", async (req, res): Promise<void> => {
-  const { articleId, taskType, masterId, componentName, size, receivedQty, ratePerPiece, receivedBy, notes, date } = req.body;
+  const { articleId, taskType, masterId, componentName, size, receivedFrom, receivedQty, ratePerPiece, receivedBy, notes, date } = req.body;
   if (!articleId || !taskType || !masterId || !receivedQty || !date) {
     res.status(400).json({ error: "Missing required fields" });
     return;
   }
   const [entry] = await db.insert(overlockButtonEntriesTable).values({
-    articleId, taskType, masterId, componentName, size, receivedQty,
+    articleId, taskType, masterId: masterId || null, componentName, size, receivedFrom, receivedQty,
     ratePerPiece, receivedBy, notes, date: new Date(date),
   }).returning();
   res.status(201).json(entry);

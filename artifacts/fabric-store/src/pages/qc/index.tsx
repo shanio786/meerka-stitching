@@ -45,7 +45,7 @@ export default function QCEntries() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
 
-  const [form, setForm] = useState({ articleId: "", inspectorName: "", masterId: "", componentName: "", size: "", receivedQty: "", passedQty: "", rejectedQty: "", rejectionReason: "", notes: "", date: new Date().toISOString().split("T")[0] });
+  const [form, setForm] = useState({ articleId: "", inspectorName: "", masterId: "", componentName: "", size: "", receivedFrom: "", receivedQty: "", passedQty: "", rejectedQty: "", rejectionReason: "", notes: "", date: new Date().toISOString().split("T")[0] });
 
   const fetchEntries = async () => {
     setLoading(true);
@@ -69,12 +69,13 @@ export default function QCEntries() {
         articleId: parseInt(form.articleId), inspectorName: form.inspectorName,
         masterId: form.masterId ? parseInt(form.masterId) : undefined,
         componentName: form.componentName || undefined, size: form.size || undefined,
+        receivedFrom: form.receivedFrom || undefined,
         receivedQty: parseInt(form.receivedQty), passedQty: parseInt(form.passedQty || "0"),
         rejectedQty: parseInt(form.rejectedQty || "0"), rejectionReason: form.rejectionReason, notes: form.notes, date: form.date,
       });
       toast({ title: "QC entry added" });
       setDialogOpen(false);
-      setForm({ articleId: "", inspectorName: "", masterId: "", componentName: "", size: "", receivedQty: "", passedQty: "", rejectedQty: "", rejectionReason: "", notes: "", date: new Date().toISOString().split("T")[0] });
+      setForm({ articleId: "", inspectorName: "", masterId: "", componentName: "", size: "", receivedFrom: "", receivedQty: "", passedQty: "", rejectedQty: "", rejectionReason: "", notes: "", date: new Date().toISOString().split("T")[0] });
       fetchEntries();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to create";
@@ -124,6 +125,7 @@ export default function QCEntries() {
                 <div><Label>Passed</Label><Input type="number" value={form.passedQty} onChange={e => setForm({ ...form, passedQty: e.target.value })} /></div>
                 <div><Label>Rejected</Label><Input type="number" value={form.rejectedQty} onChange={e => setForm({ ...form, rejectedQty: e.target.value })} /></div>
               </div>
+              <div><Label>Received From</Label><Input value={form.receivedFrom} onChange={e => setForm({ ...form, receivedFrom: e.target.value })} placeholder="e.g. Stitching Dept / Master name" /></div>
               <div><Label>Rejection Reason</Label><Input value={form.rejectionReason} onChange={e => setForm({ ...form, rejectionReason: e.target.value })} placeholder="e.g. Uneven stitch, thread loose" /></div>
               <div><Label>Date *</Label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
               <div><Label>Notes</Label><Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>

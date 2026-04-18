@@ -10,6 +10,7 @@ export const overlockButtonEntriesTable = pgTable("overlock_button_entries", {
   masterId: integer("master_id").notNull().references(() => mastersTable.id),
   componentName: text("component_name"),
   size: text("size"),
+  receivedFrom: text("received_from"),
   receivedQty: integer("received_qty").notNull(),
   completedQty: integer("completed_qty").notNull().default(0),
   wasteQty: integer("waste_qty").notNull().default(0),

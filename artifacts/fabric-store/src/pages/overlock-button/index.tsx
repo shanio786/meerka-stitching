@@ -51,7 +51,7 @@ export default function OverlockButton() {
   const [completeDialog, setCompleteDialog] = useState<number | null>(null);
   const { toast } = useToast();
 
-  const [form, setForm] = useState({ articleId: "", taskType: "overlock", masterId: "", componentName: "", size: "", receivedQty: "", ratePerPiece: "", receivedBy: "", notes: "", date: new Date().toISOString().split("T")[0] });
+  const [form, setForm] = useState({ articleId: "", taskType: "overlock", masterId: "", componentName: "", size: "", receivedFrom: "", receivedQty: "", ratePerPiece: "", receivedBy: "", notes: "", date: new Date().toISOString().split("T")[0] });
   const [completeForm, setCompleteForm] = useState({ completedQty: "", wasteQty: "", wasteReason: "" });
 
   const fetchEntries = async () => {
@@ -78,12 +78,13 @@ export default function OverlockButton() {
       await apiPost("/overlock-button", {
         articleId: parseInt(form.articleId), taskType: form.taskType, masterId: parseInt(form.masterId),
         componentName: form.componentName || undefined, size: form.size || undefined,
+        receivedFrom: form.receivedFrom || undefined,
         receivedQty: parseInt(form.receivedQty), ratePerPiece: form.ratePerPiece ? parseFloat(form.ratePerPiece) : undefined,
         receivedBy: form.receivedBy, notes: form.notes, date: form.date,
       });
       toast({ title: "Entry added" });
       setDialogOpen(false);
-      setForm({ articleId: "", taskType: "overlock", masterId: "", componentName: "", size: "", receivedQty: "", ratePerPiece: "", receivedBy: "", notes: "", date: new Date().toISOString().split("T")[0] });
+      setForm({ articleId: "", taskType: "overlock", masterId: "", componentName: "", size: "", receivedFrom: "", receivedQty: "", ratePerPiece: "", receivedBy: "", notes: "", date: new Date().toISOString().split("T")[0] });
       fetchEntries();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to create";
@@ -147,7 +148,10 @@ export default function OverlockButton() {
                   <SelectContent>{["XS", "S", "M", "L", "XL", "XXL"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div><Label>Received By</Label><Input value={form.receivedBy} onChange={e => setForm({ ...form, receivedBy: e.target.value })} placeholder="Person who received pieces" /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Received By</Label><Input value={form.receivedBy} onChange={e => setForm({ ...form, receivedBy: e.target.value })} placeholder="Person who received pieces" /></div>
+                <div><Label>Received From</Label><Input value={form.receivedFrom} onChange={e => setForm({ ...form, receivedFrom: e.target.value })} placeholder="e.g. Stitching Dept / Master name" /></div>
+              </div>
               <div><Label>Date *</Label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
               <div><Label>Notes</Label><Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
               <Button className="w-full" onClick={handleCreate}>Add Entry</Button>

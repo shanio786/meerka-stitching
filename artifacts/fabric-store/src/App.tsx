@@ -9,6 +9,7 @@ import Dashboard from "@/pages/dashboard";
 import ArticlesList from "@/pages/articles/index";
 import ArticleForm from "@/pages/articles/form";
 import ArticleDetail from "@/pages/articles/detail";
+import ArticleTracker from "@/pages/articles/tracker";
 import Reports from "@/pages/reports";
 import MastersList from "@/pages/masters/index";
 import CuttingJobs from "@/pages/cutting/index";
@@ -32,6 +33,7 @@ function Router() {
         
         <Route path="/articles" component={ArticlesList} />
         <Route path="/articles/new" component={ArticleForm} />
+        <Route path="/articles/:id/track" component={ArticleTracker} />
         <Route path="/articles/:id" component={ArticleDetail} />
         
         <Route path="/reports" component={Reports} />

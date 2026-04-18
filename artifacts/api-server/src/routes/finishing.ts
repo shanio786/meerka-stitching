@@ -19,6 +19,9 @@ router.get("/finishing", async (req, res): Promise<void> => {
       masterId: finishingEntriesTable.masterId,
       masterName: mastersTable.name,
       workerName: finishingEntriesTable.workerName,
+      componentName: finishingEntriesTable.componentName,
+      size: finishingEntriesTable.size,
+      receivedFrom: finishingEntriesTable.receivedFrom,
       receivedQty: finishingEntriesTable.receivedQty,
       packedQty: finishingEntriesTable.packedQty,
       wasteQty: finishingEntriesTable.wasteQty,
@@ -42,13 +45,13 @@ router.get("/finishing", async (req, res): Promise<void> => {
 });
 
 router.post("/finishing", async (req, res): Promise<void> => {
-  const { articleId, masterId, workerName, receivedQty, ratePerPiece, receivedBy, notes, date } = req.body;
+  const { articleId, masterId, workerName, componentName, size, receivedFrom, receivedQty, ratePerPiece, receivedBy, notes, date } = req.body;
   if (!articleId || !workerName || !receivedQty || !date) {
     res.status(400).json({ error: "Missing required fields" });
     return;
   }
   const [entry] = await db.insert(finishingEntriesTable).values({
-    articleId, masterId, workerName, receivedQty, ratePerPiece, receivedBy, notes, date: new Date(date),
+    articleId, masterId, workerName, componentName, size, receivedFrom, receivedQty, ratePerPiece, receivedBy, notes, date: new Date(date),
   }).returning();
   res.status(201).json(entry);
 });

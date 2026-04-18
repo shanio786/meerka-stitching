@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Eye, Trash2, Power } from "lucide-react";
+import { Search, Eye, Trash2, Power, Activity } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Article {
@@ -160,8 +160,11 @@ export default function ArticlesList() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          <Link href={`/articles/${article.id}/track`}>
+                            <Button variant="ghost" size="icon" title="Track Production"><Activity className="h-4 w-4 text-blue-600" /></Button>
+                          </Link>
                           <Link href={`/articles/${article.id}`}>
-                            <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" title="Edit"><Eye className="h-4 w-4" /></Button>
                           </Link>
                           <Button variant="ghost" size="icon" onClick={() => handleToggle(article.id)}>
                             <Power className={`h-4 w-4 ${article.isActive ? "text-green-600" : "text-muted-foreground"}`} />

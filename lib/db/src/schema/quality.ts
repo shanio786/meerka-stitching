@@ -11,6 +11,7 @@ export const qcEntriesTable = pgTable("qc_entries", {
   masterId: integer("master_id").references(() => mastersTable.id),
   componentName: text("component_name"),
   size: text("size"),
+  receivedFrom: text("received_from"),
   receivedQty: integer("received_qty").notNull(),
   passedQty: integer("passed_qty").notNull().default(0),
   rejectedQty: integer("rejected_qty").notNull().default(0),

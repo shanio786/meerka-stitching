@@ -21,6 +21,7 @@ router.get("/qc", async (req, res): Promise<void> => {
       masterName: mastersTable.name,
       componentName: qcEntriesTable.componentName,
       size: qcEntriesTable.size,
+      receivedFrom: qcEntriesTable.receivedFrom,
       receivedQty: qcEntriesTable.receivedQty,
       passedQty: qcEntriesTable.passedQty,
       rejectedQty: qcEntriesTable.rejectedQty,
@@ -39,13 +40,13 @@ router.get("/qc", async (req, res): Promise<void> => {
 });
 
 router.post("/qc", async (req, res): Promise<void> => {
-  const { articleId, stitchingJobId, inspectorName, masterId, componentName, size, receivedQty, passedQty, rejectedQty, rejectionReason, notes, date } = req.body;
+  const { articleId, stitchingJobId, inspectorName, masterId, componentName, size, receivedFrom, receivedQty, passedQty, rejectedQty, rejectionReason, notes, date } = req.body;
   if (!articleId || !inspectorName || !receivedQty || !date) {
     res.status(400).json({ error: "Missing required fields" });
     return;
   }
   const [entry] = await db.insert(qcEntriesTable).values({
-    articleId, stitchingJobId, inspectorName, masterId, componentName, size,
+    articleId, stitchingJobId, inspectorName, masterId, componentName, size, receivedFrom,
     receivedQty, passedQty: passedQty || 0, rejectedQty: rejectedQty || 0,
     rejectionReason, notes, date: new Date(date),
   }).returning();
