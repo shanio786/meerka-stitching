@@ -4,6 +4,7 @@ const API_BASE = `${BASE}/api`;
 export async function apiFetch<T = unknown>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
+    credentials: "include",
     headers: { "Content-Type": "application/json", ...options?.headers },
     ...options,
   });

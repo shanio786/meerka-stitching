@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { UserButton } from "@clerk/react";
 import { 
   LayoutDashboard, 
   Package, 
@@ -17,11 +18,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
+import { useMe } from "@/hooks/useMe";
 
 interface NavGroup {
   label: string;
-  items: { name: string; href: string; icon: any }[];
+  items: { name: string; href: string; icon: any; adminOnly?: boolean }[];
 }
 
 const navGroups: NavGroup[] = [
@@ -52,7 +55,7 @@ const navGroups: NavGroup[] = [
     label: "Management",
     items: [
       { name: "Masters", href: "/masters", icon: Users },
-      { name: "Accounts", href: "/accounts", icon: Wallet },
+      { name: "Accounts", href: "/accounts", icon: Wallet, adminOnly: true },
       { name: "Reports", href: "/reports", icon: BarChart3 },
     ],
   },
@@ -61,10 +64,15 @@ const navGroups: NavGroup[] = [
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { isAdmin } = useMe();
+
+  const visibleGroups = navGroups
+    .map((g) => ({ ...g, items: g.items.filter((i) => !i.adminOnly || isAdmin) }))
+    .filter((g) => g.items.length > 0);
 
   const NavLinks = () => (
     <nav className="p-3 space-y-4" data-testid="sidebar-nav">
-      {navGroups.map((group) => (
+      {visibleGroups.map((group) => (
         <div key={group.label}>
           <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
             {group.label}
@@ -148,14 +156,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="font-bold text-base text-primary md:hidden tracking-tight">Stitching ERP</div>
           </div>
           
-          <div className="ml-auto flex items-center gap-4">
+          <div className="ml-auto flex items-center gap-3">
+            <Badge variant={isAdmin ? "default" : "secondary"} className="hidden sm:inline-flex" data-testid="badge-role">
+              {isAdmin ? "Admin" : "Management"}
+            </Badge>
             <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
               <Bell className="h-5 w-5 text-muted-foreground" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-destructive border-2 border-background"></span>
             </Button>
-            <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-medium text-sm">
-              AD
-            </div>
+            <UserButton afterSignOutUrl={import.meta.env.BASE_URL.replace(/\/$/, "") + "/sign-in"} />
           </div>
         </header>
 

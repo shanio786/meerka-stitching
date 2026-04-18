@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { requireAuth, requireAdmin } from "../middlewares/auth";
 import healthRouter from "./health";
 import articlesRouter from "./articles";
 import componentsRouter from "./components";
@@ -20,7 +21,26 @@ import articleTrackerRouter from "./article-tracker";
 
 const router: IRouter = Router();
 
+// Public
 router.use(healthRouter);
+
+// Provide /me so client can know its role
+router.get("/me", (req, res) => {
+  if (!req.userId) {
+    res.json({ signedIn: false });
+    return;
+  }
+  res.json({
+    signedIn: true,
+    userId: req.userId,
+    email: req.userEmail,
+    role: req.userRole || "management",
+  });
+});
+
+// Authenticated routes
+router.use(requireAuth);
+
 router.use(articlesRouter);
 router.use(componentsRouter);
 router.use(accessoriesRouter);
@@ -34,9 +54,11 @@ router.use(qualityRouter);
 router.use(overlockButtonRouter);
 router.use(finishingRouter);
 router.use(finalStoreRouter);
-router.use(accountsRouter);
 router.use(imagesRouter);
 router.use(customOptionsRouter);
 router.use(articleTrackerRouter);
+
+// Admin-only (payments / accounts / ledger)
+router.use(requireAdmin, accountsRouter);
 
 export default router;
