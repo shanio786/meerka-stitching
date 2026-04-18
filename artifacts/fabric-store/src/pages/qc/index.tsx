@@ -9,11 +9,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Trash2, CheckCircle, XCircle, Search } from "lucide-react";
+import { Plus, Trash2, CheckCircle, XCircle, Search, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, apiDelete } from "@/lib/api";
 import { format } from "date-fns";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { PendingPoolCard, type PendingRow } from "@/components/PendingPoolCard";
+import { printJobCard } from "@/components/JobCard";
 
 interface QCEntry {
   id: number;
@@ -25,6 +27,7 @@ interface QCEntry {
   masterId: number | null;
   componentName: string | null;
   size: string | null;
+  receivedFrom: string | null;
   receivedQty: number;
   passedQty: number;
   rejectedQty: number;
@@ -36,6 +39,8 @@ interface QCEntry {
 interface ArticleOption { id: number; articleCode: string; articleName: string; }
 interface MasterOption { id: number; name: string; masterType: string; }
 
+const emptyForm = { articleId: "", inspectorName: "", masterId: "", componentName: "", size: "", receivedFrom: "", receivedQty: "", passedQty: "", rejectedQty: "", rejectionReason: "", notes: "", date: new Date().toISOString().split("T")[0] };
+
 export default function QCEntries() {
   const [entries, setEntries] = useState<QCEntry[]>([]);
   const [articles, setArticles] = useState<ArticleOption[]>([]);
@@ -43,9 +48,10 @@ export default function QCEntries() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [poolKey, setPoolKey] = useState(0);
   const { toast } = useToast();
 
-  const [form, setForm] = useState({ articleId: "", inspectorName: "", masterId: "", componentName: "", size: "", receivedFrom: "", receivedQty: "", passedQty: "", rejectedQty: "", rejectionReason: "", notes: "", date: new Date().toISOString().split("T")[0] });
+  const [form, setForm] = useState(emptyForm);
 
   const fetchEntries = async () => {
     setLoading(true);
@@ -62,6 +68,18 @@ export default function QCEntries() {
     apiGet<MasterOption[]>("/masters?active=true").then(setMasters).catch(() => {});
   }, []);
 
+  const handlePoolReceive = (row: PendingRow) => {
+    setForm({
+      ...emptyForm,
+      articleId: String(row.articleId),
+      componentName: row.componentName || "",
+      size: row.size || "",
+      receivedQty: String(row.available),
+      receivedFrom: row.masterName ? `Overlock/Button - ${row.masterName}` : "Overlock/Button Dept",
+    });
+    setDialogOpen(true);
+  };
+
   const handleCreate = async () => {
     if (!form.articleId || !form.inspectorName || !form.receivedQty) { toast({ title: "Fill required fields", variant: "destructive" }); return; }
     try {
@@ -75,12 +93,45 @@ export default function QCEntries() {
       });
       toast({ title: "QC entry added" });
       setDialogOpen(false);
-      setForm({ articleId: "", inspectorName: "", masterId: "", componentName: "", size: "", receivedFrom: "", receivedQty: "", passedQty: "", rejectedQty: "", rejectionReason: "", notes: "", date: new Date().toISOString().split("T")[0] });
+      setForm(emptyForm);
       fetchEntries();
+      setPoolKey(k => k + 1);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to create";
       toast({ title: "Error", description: msg, variant: "destructive" });
     }
+  };
+
+  const handlePrintJobCard = (e: QCEntry) => {
+    void printJobCard({
+      title: "Quality Control Card",
+      subtitle: `${e.articleName} (${e.articleCode})`,
+      jobNumber: `QC-${e.id}`,
+      date: format(new Date(e.date), "PPP"),
+      sections: [
+        {
+          heading: "Inspection",
+          rows: [
+            { label: "Inspector", value: e.inspectorName },
+            { label: "Stitching Master", value: e.masterName || "-" },
+            { label: "Component", value: e.componentName || "-" },
+            { label: "Size", value: e.size || "-" },
+            { label: "Received From", value: e.receivedFrom || "-" },
+          ],
+        },
+        {
+          heading: "Result",
+          rows: [
+            { label: "Received Qty", value: e.receivedQty },
+            { label: "Passed", value: e.passedQty },
+            { label: "Rejected", value: e.rejectedQty },
+            { label: "Pass %", value: passRate(e) + "%" },
+            { label: "Rejection Reason", value: e.rejectionReason || "-" },
+          ],
+        },
+      ],
+      footerNote: e.notes || undefined,
+    });
   };
 
   const passRate = (e: QCEntry) => e.receivedQty > 0 ? ((e.passedQty / e.receivedQty) * 100).toFixed(1) : "0";
@@ -92,13 +143,13 @@ export default function QCEntries() {
   });
 
   const articleOptions = articles.map(a => ({ value: a.id.toString(), label: `${a.articleCode} - ${a.articleName}`, sublabel: a.articleCode }));
-  const masterOptions = masters.filter(m => m.masterType === "stitching").map(m => ({ value: m.id.toString(), label: m.name }));
+  const masterOptions = masters.filter(m => m.masterType === "stitching" || m.masterType === "overlock" || m.masterType === "button").map(m => ({ value: m.id.toString(), label: `${m.name} (${m.masterType})` }));
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Quality Control" description="Inspect stitched pieces - track passed, rejected, and rejection reasons" actions={
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4" /> New QC Entry</Button></DialogTrigger>
+      <PageHeader title="Quality Control" description="Overlock/Button ke baad pieces inspect karo — passed/rejected ka record rakhein" actions={
+        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setForm(emptyForm); }}>
+          <DialogTrigger asChild><Button data-testid="button-new-qc"><Plus className="mr-2 h-4 w-4" /> New QC Entry</Button></DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader><DialogTitle>Add QC Entry</DialogTitle></DialogHeader>
             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
@@ -107,12 +158,12 @@ export default function QCEntries() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Inspector Name *</Label><Input value={form.inspectorName} onChange={e => setForm({ ...form, inspectorName: e.target.value })} /></div>
-                <div><Label>Master (stitching)</Label>
+                <div><Label>Linked Master</Label>
                   <SearchableSelect options={masterOptions} value={form.masterId} onValueChange={v => setForm({ ...form, masterId: v })} placeholder="Select master" searchPlaceholder="Search master..." />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Component</Label><Input value={form.componentName} onChange={e => setForm({ ...form, componentName: e.target.value })} /></div>
+                <div><Label>Component</Label><Input value={form.componentName} onChange={e => setForm({ ...form, componentName: e.target.value })} placeholder="e.g. Front" /></div>
                 <div><Label>Size</Label>
                   <Select value={form.size} onValueChange={v => setForm({ ...form, size: v })}>
                     <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
@@ -125,7 +176,7 @@ export default function QCEntries() {
                 <div><Label>Passed</Label><Input type="number" value={form.passedQty} onChange={e => setForm({ ...form, passedQty: e.target.value })} /></div>
                 <div><Label>Rejected</Label><Input type="number" value={form.rejectedQty} onChange={e => setForm({ ...form, rejectedQty: e.target.value })} /></div>
               </div>
-              <div><Label>Received From</Label><Input value={form.receivedFrom} onChange={e => setForm({ ...form, receivedFrom: e.target.value })} placeholder="e.g. Stitching Dept / Master name" /></div>
+              <div><Label>Received From</Label><Input value={form.receivedFrom} onChange={e => setForm({ ...form, receivedFrom: e.target.value })} placeholder="e.g. Overlock - Master name" /></div>
               <div><Label>Rejection Reason</Label><Input value={form.rejectionReason} onChange={e => setForm({ ...form, rejectionReason: e.target.value })} placeholder="e.g. Uneven stitch, thread loose" /></div>
               <div><Label>Date *</Label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
               <div><Label>Notes</Label><Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
@@ -134,6 +185,15 @@ export default function QCEntries() {
           </DialogContent>
         </Dialog>
       } />
+
+      <PendingPoolCard
+        title="Pending from Overlock/Button"
+        description="Overlock/Button complete ho chuke pieces — yahan inspect karne ke liye click karo."
+        endpoint="/qc/pending-from-overlock"
+        fromLabel="OB Master"
+        onReceive={handlePoolReceive}
+        refreshKey={poolKey}
+      />
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card><CardContent className="pt-6"><div className="text-sm text-muted-foreground">Total Inspected</div><div className="text-2xl font-bold">{entries.reduce((s, e) => s + e.receivedQty, 0)}</div></CardContent></Card>
@@ -165,9 +225,10 @@ export default function QCEntries() {
                     <TableHead>Master</TableHead>
                     <TableHead>Component</TableHead>
                     <TableHead>Size</TableHead>
-                    <TableHead className="text-center">Received</TableHead>
-                    <TableHead className="text-center">Passed</TableHead>
-                    <TableHead className="text-center">Rejected</TableHead>
+                    <TableHead>From</TableHead>
+                    <TableHead className="text-center">Recvd</TableHead>
+                    <TableHead className="text-center">Pass</TableHead>
+                    <TableHead className="text-center">Rej</TableHead>
                     <TableHead>Pass %</TableHead>
                     <TableHead>Reason</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -181,13 +242,21 @@ export default function QCEntries() {
                       <TableCell>{e.inspectorName}</TableCell>
                       <TableCell>{e.masterName || "-"}</TableCell>
                       <TableCell>{e.componentName || "-"}</TableCell>
-                      <TableCell>{e.size || "-"}</TableCell>
+                      <TableCell>{e.size ? <Badge variant="secondary">{e.size}</Badge> : "-"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate" title={e.receivedFrom || ""}>{e.receivedFrom || "-"}</TableCell>
                       <TableCell className="text-center font-mono">{e.receivedQty}</TableCell>
                       <TableCell className="text-center font-mono text-green-600">{e.passedQty}</TableCell>
                       <TableCell className="text-center font-mono text-destructive">{e.rejectedQty}</TableCell>
                       <TableCell><Badge variant={parseFloat(passRate(e)) >= 90 ? "default" : "destructive"}>{passRate(e)}%</Badge></TableCell>
-                      <TableCell className="max-w-[120px] truncate">{e.rejectionReason || "-"}</TableCell>
-                      <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => { if (confirm("Delete?")) apiDelete(`/qc/${e.id}`).then(fetchEntries); }}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
+                      <TableCell className="max-w-[120px] truncate" title={e.rejectionReason || ""}>{e.rejectionReason || "-"}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => handlePrintJobCard(e)} title="Print Job Card" data-testid={`button-jobcard-${e.id}`}>
+                            <Printer className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => { if (confirm("Delete?")) apiDelete(`/qc/${e.id}`).then(() => { fetchEntries(); setPoolKey(k => k + 1); }); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

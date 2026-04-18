@@ -1,8 +1,65 @@
 import { Router, type IRouter } from "express";
 import { eq, and, sql } from "drizzle-orm";
-import { db, qcEntriesTable, articlesTable, mastersTable } from "@workspace/db";
+import { db, qcEntriesTable, articlesTable, mastersTable, overlockButtonEntriesTable } from "@workspace/db";
 
 const router: IRouter = Router();
+
+// Pending pool for QC: pieces completed at Overlock/Button minus already received at QC.
+router.get("/qc/pending-from-overlock", async (req, res): Promise<void> => {
+  const { articleId } = req.query;
+  const completed = await db
+    .select({
+      articleId: overlockButtonEntriesTable.articleId,
+      articleCode: articlesTable.articleCode,
+      articleName: articlesTable.articleName,
+      componentName: overlockButtonEntriesTable.componentName,
+      size: overlockButtonEntriesTable.size,
+      taskType: overlockButtonEntriesTable.taskType,
+      masterId: overlockButtonEntriesTable.masterId,
+      masterName: mastersTable.name,
+      completed: sql<number>`COALESCE(SUM(${overlockButtonEntriesTable.completedQty}), 0)`.as("completed"),
+      lastDate: sql<string>`MAX(${overlockButtonEntriesTable.completedDate})`.as("last_date"),
+    })
+    .from(overlockButtonEntriesTable)
+    .leftJoin(articlesTable, eq(articlesTable.id, overlockButtonEntriesTable.articleId))
+    .leftJoin(mastersTable, eq(mastersTable.id, overlockButtonEntriesTable.masterId))
+    .where(and(
+      eq(overlockButtonEntriesTable.status, "completed"),
+      articleId ? eq(overlockButtonEntriesTable.articleId, Number(articleId)) : sql`TRUE`,
+    ))
+    .groupBy(
+      overlockButtonEntriesTable.articleId, articlesTable.articleCode, articlesTable.articleName,
+      overlockButtonEntriesTable.componentName, overlockButtonEntriesTable.size,
+      overlockButtonEntriesTable.taskType, overlockButtonEntriesTable.masterId, mastersTable.name,
+    );
+
+  const received = await db
+    .select({
+      articleId: qcEntriesTable.articleId,
+      componentName: qcEntriesTable.componentName,
+      size: qcEntriesTable.size,
+      received: sql<number>`COALESCE(SUM(${qcEntriesTable.receivedQty}), 0)`.as("received"),
+    })
+    .from(qcEntriesTable)
+    .groupBy(qcEntriesTable.articleId, qcEntriesTable.componentName, qcEntriesTable.size);
+
+  // FIFO allocation across master rows for the same (article, component, size).
+  const sorted = [...completed].sort((a, b) => (a.lastDate || "").localeCompare(b.lastDate || ""));
+  const consumedBucket = new Map<string, number>();
+  const result = sorted.map((c) => {
+    const key = `${c.articleId}|${c.componentName || ""}|${c.size || ""}`;
+    const totalReceived = Number(received.find((r) => r.articleId === c.articleId && (r.componentName || "") === (c.componentName || "") && (r.size || "") === (c.size || ""))?.received ?? 0);
+    const alreadyConsumed = consumedBucket.get(key) ?? 0;
+    const remaining = Math.max(0, totalReceived - alreadyConsumed);
+    const completedQty = Number(c.completed);
+    const consumeFromThis = Math.min(completedQty, remaining);
+    consumedBucket.set(key, alreadyConsumed + consumeFromThis);
+    const available = completedQty - consumeFromThis;
+    return { ...c, completed: completedQty, available };
+  }).filter((r) => r.available > 0);
+
+  res.json(result);
+});
 
 router.get("/qc", async (req, res): Promise<void> => {
   const { articleId } = req.query;

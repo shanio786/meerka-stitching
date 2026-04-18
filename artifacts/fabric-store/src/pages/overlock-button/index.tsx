@@ -9,11 +9,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, CheckCircle, Trash2, Search } from "lucide-react";
+import { Plus, CheckCircle, Trash2, Search, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { format } from "date-fns";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { PendingPoolCard, type PendingRow } from "@/components/PendingPoolCard";
+import { printJobCard } from "@/components/JobCard";
 
 interface OBEntry {
   id: number;
@@ -31,13 +33,17 @@ interface OBEntry {
   wasteReason: string | null;
   ratePerPiece: number | null;
   totalAmount: number | null;
+  receivedFrom: string | null;
   receivedBy: string | null;
   status: string;
   date: string;
+  notes: string | null;
 }
 
 interface ArticleOption { id: number; articleCode: string; articleName: string; }
 interface MasterOption { id: number; name: string; masterType: string; }
+
+const emptyForm = { articleId: "", taskType: "overlock", masterId: "", componentName: "", size: "", receivedFrom: "", receivedQty: "", ratePerPiece: "", receivedBy: "", notes: "", date: new Date().toISOString().split("T")[0] };
 
 export default function OverlockButton() {
   const [entries, setEntries] = useState<OBEntry[]>([]);
@@ -49,9 +55,10 @@ export default function OverlockButton() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [completeDialog, setCompleteDialog] = useState<number | null>(null);
+  const [poolKey, setPoolKey] = useState(0);
   const { toast } = useToast();
 
-  const [form, setForm] = useState({ articleId: "", taskType: "overlock", masterId: "", componentName: "", size: "", receivedFrom: "", receivedQty: "", ratePerPiece: "", receivedBy: "", notes: "", date: new Date().toISOString().split("T")[0] });
+  const [form, setForm] = useState(emptyForm);
   const [completeForm, setCompleteForm] = useState({ completedQty: "", wasteQty: "", wasteReason: "" });
 
   const fetchEntries = async () => {
@@ -72,6 +79,18 @@ export default function OverlockButton() {
     apiGet<MasterOption[]>("/masters?active=true").then(setMasters).catch(() => {});
   }, [taskType, statusFilter]);
 
+  const handlePoolReceive = (row: PendingRow) => {
+    setForm({
+      ...emptyForm,
+      articleId: String(row.articleId),
+      componentName: row.componentName || "",
+      size: row.size || "",
+      receivedQty: String(row.available),
+      receivedFrom: row.masterName ? `Stitching - ${row.masterName}` : "Stitching Dept",
+    });
+    setDialogOpen(true);
+  };
+
   const handleCreate = async () => {
     if (!form.articleId || !form.masterId || !form.receivedQty) { toast({ title: "Fill required fields", variant: "destructive" }); return; }
     try {
@@ -84,8 +103,9 @@ export default function OverlockButton() {
       });
       toast({ title: "Entry added" });
       setDialogOpen(false);
-      setForm({ articleId: "", taskType: "overlock", masterId: "", componentName: "", size: "", receivedFrom: "", receivedQty: "", ratePerPiece: "", receivedBy: "", notes: "", date: new Date().toISOString().split("T")[0] });
+      setForm(emptyForm);
       fetchEntries();
+      setPoolKey(k => k + 1);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to create";
       toast({ title: "Error", description: msg, variant: "destructive" });
@@ -103,10 +123,45 @@ export default function OverlockButton() {
       setCompleteDialog(null);
       setCompleteForm({ completedQty: "", wasteQty: "", wasteReason: "" });
       fetchEntries();
+      setPoolKey(k => k + 1);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to complete";
       toast({ title: "Error", description: msg, variant: "destructive" });
     }
+  };
+
+  const handlePrintJobCard = (e: OBEntry) => {
+    void printJobCard({
+      title: `${e.taskType === "button" ? "Button" : "Overlock"} Job Card`,
+      subtitle: `${e.articleName} (${e.articleCode})`,
+      jobNumber: `OB-${e.id}`,
+      date: format(new Date(e.date), "PPP"),
+      sections: [
+        {
+          heading: "Assignment",
+          rows: [
+            { label: "Master", value: e.masterName },
+            { label: "Task", value: e.taskType },
+            { label: "Component", value: e.componentName || "-" },
+            { label: "Size", value: e.size || "-" },
+            { label: "Received From", value: e.receivedFrom || "-" },
+            { label: "Received By", value: e.receivedBy || "-" },
+          ],
+        },
+        {
+          heading: "Quantities",
+          rows: [
+            { label: "Received Qty", value: e.receivedQty },
+            { label: "Completed Qty", value: e.completedQty ?? "-" },
+            { label: "Waste Qty", value: e.wasteQty ?? "-" },
+            { label: "Rate/Piece", value: e.ratePerPiece ? `Rs.${e.ratePerPiece}` : "-" },
+            { label: "Total Amount", value: e.totalAmount ? `Rs.${e.totalAmount.toLocaleString()}` : "-" },
+            { label: "Status", value: e.status },
+          ],
+        },
+      ],
+      footerNote: e.notes || undefined,
+    });
   };
 
   const filtered = entries.filter(e => {
@@ -120,11 +175,11 @@ export default function OverlockButton() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Overlock / Button" description="Track overlock and button work assigned to masters" actions={
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4" /> New Entry</Button></DialogTrigger>
+      <PageHeader title="Overlock / Button" description="Stitching se aaye pieces — size + component wise receive aur complete karein" actions={
+        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setForm(emptyForm); }}>
+          <DialogTrigger asChild><Button data-testid="button-new-entry"><Plus className="mr-2 h-4 w-4" /> New Entry</Button></DialogTrigger>
           <DialogContent className="max-w-lg">
-            <DialogHeader><DialogTitle>Add Overlock/Button Entry</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>Receive Pieces (Overlock/Button)</DialogTitle></DialogHeader>
             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
               <div><Label>Task Type *</Label>
                 <Select value={form.taskType} onValueChange={v => setForm({ ...form, taskType: v })}>
@@ -139,18 +194,21 @@ export default function OverlockButton() {
                 <SearchableSelect options={masterOptions} value={form.masterId} onValueChange={v => setForm({ ...form, masterId: v })} placeholder="Search & select master" searchPlaceholder="Search master..." />
               </div>
               <div className="grid grid-cols-2 gap-3">
+                <div><Label>Component</Label><Input value={form.componentName} onChange={e => setForm({ ...form, componentName: e.target.value })} placeholder="e.g. Front, Sleeve" /></div>
+                <div><Label>Size</Label>
+                  <Select value={form.size} onValueChange={v => setForm({ ...form, size: v })}>
+                    <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+                    <SelectContent>{["XS", "S", "M", "L", "XL", "XXL"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div><Label>Received Qty *</Label><Input type="number" value={form.receivedQty} onChange={e => setForm({ ...form, receivedQty: e.target.value })} /></div>
                 <div><Label>Rate/Piece</Label><Input type="number" value={form.ratePerPiece} onChange={e => setForm({ ...form, ratePerPiece: e.target.value })} /></div>
               </div>
-              <div><Label>Size</Label>
-                <Select value={form.size} onValueChange={v => setForm({ ...form, size: v })}>
-                  <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
-                  <SelectContent>{["XS", "S", "M", "L", "XL", "XXL"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Received By</Label><Input value={form.receivedBy} onChange={e => setForm({ ...form, receivedBy: e.target.value })} placeholder="Person who received pieces" /></div>
-                <div><Label>Received From</Label><Input value={form.receivedFrom} onChange={e => setForm({ ...form, receivedFrom: e.target.value })} placeholder="e.g. Stitching Dept / Master name" /></div>
+                <div><Label>Received By</Label><Input value={form.receivedBy} onChange={e => setForm({ ...form, receivedBy: e.target.value })} placeholder="Person who received" /></div>
+                <div><Label>Received From</Label><Input value={form.receivedFrom} onChange={e => setForm({ ...form, receivedFrom: e.target.value })} placeholder="e.g. Stitching - Master name" /></div>
               </div>
               <div><Label>Date *</Label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
               <div><Label>Notes</Label><Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
@@ -159,6 +217,15 @@ export default function OverlockButton() {
           </DialogContent>
         </Dialog>
       } />
+
+      <PendingPoolCard
+        title="Pending from Stitching"
+        description="Yeh pieces stitching complete ho chuke hain, abhi overlock/button mein receive nahi hue. Click karke receive karo."
+        endpoint="/overlock-button/pending-from-stitching"
+        fromLabel="Stitcher"
+        onReceive={handlePoolReceive}
+        refreshKey={poolKey}
+      />
 
       <Card>
         <CardContent className="pt-6">
@@ -190,8 +257,10 @@ export default function OverlockButton() {
                     <TableHead>Type</TableHead>
                     <TableHead>Article</TableHead>
                     <TableHead>Master</TableHead>
+                    <TableHead>Component</TableHead>
                     <TableHead>Size</TableHead>
-                    <TableHead className="text-center">Received</TableHead>
+                    <TableHead>From</TableHead>
+                    <TableHead className="text-center">Recvd</TableHead>
                     <TableHead className="text-center">Done</TableHead>
                     <TableHead className="text-center">Waste</TableHead>
                     <TableHead>Rate</TableHead>
@@ -207,10 +276,12 @@ export default function OverlockButton() {
                       <TableCell><Badge variant="outline">{e.taskType}</Badge></TableCell>
                       <TableCell><div className="font-medium">{e.articleName}</div><div className="text-xs text-muted-foreground">{e.articleCode}</div></TableCell>
                       <TableCell>{e.masterName}</TableCell>
-                      <TableCell>{e.size || "-"}</TableCell>
-                      <TableCell className="text-center">{e.receivedQty}</TableCell>
-                      <TableCell className="text-center">{e.completedQty || "-"}</TableCell>
-                      <TableCell className="text-center">{e.wasteQty || "-"}</TableCell>
+                      <TableCell>{e.componentName || "-"}</TableCell>
+                      <TableCell>{e.size ? <Badge variant="secondary">{e.size}</Badge> : "-"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate" title={e.receivedFrom || ""}>{e.receivedFrom || "-"}</TableCell>
+                      <TableCell className="text-center font-mono">{e.receivedQty}</TableCell>
+                      <TableCell className="text-center font-mono">{e.completedQty ?? "-"}</TableCell>
+                      <TableCell className="text-center font-mono text-destructive">{e.wasteQty || "-"}</TableCell>
                       <TableCell>{e.ratePerPiece ? `Rs.${e.ratePerPiece}` : "-"}</TableCell>
                       <TableCell className="font-mono">{e.totalAmount ? `Rs.${e.totalAmount.toLocaleString()}` : "-"}</TableCell>
                       <TableCell>
@@ -223,13 +294,21 @@ export default function OverlockButton() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => handlePrintJobCard(e)} title="Print Job Card" data-testid={`button-jobcard-${e.id}`}>
+                            <Printer className="h-4 w-4" />
+                          </Button>
                           {e.status !== "completed" && (
                             <Dialog open={completeDialog === e.id} onOpenChange={o => { setCompleteDialog(o ? e.id : null); if (!o) setCompleteForm({ completedQty: "", wasteQty: "", wasteReason: "" }); }}>
-                              <DialogTrigger asChild><Button variant="ghost" size="icon"><CheckCircle className="h-4 w-4 text-green-600" /></Button></DialogTrigger>
+                              <DialogTrigger asChild><Button variant="ghost" size="icon" data-testid={`button-complete-${e.id}`}><CheckCircle className="h-4 w-4 text-green-600" /></Button></DialogTrigger>
                               <DialogContent>
                                 <DialogHeader><DialogTitle>Complete Entry</DialogTitle></DialogHeader>
                                 <div className="space-y-4">
-                                  <div><Label>Completed Qty *</Label><Input type="number" value={completeForm.completedQty} onChange={ev => setCompleteForm({ ...completeForm, completedQty: ev.target.value })} /></div>
+                                  <div className="text-sm bg-muted/50 p-3 rounded-md">
+                                    <div><span className="text-muted-foreground">Article:</span> <span className="font-medium">{e.articleName}</span></div>
+                                    <div><span className="text-muted-foreground">Master:</span> <span className="font-medium">{e.masterName}</span></div>
+                                    <div><span className="text-muted-foreground">Received:</span> <span className="font-medium">{e.receivedQty} pcs</span></div>
+                                  </div>
+                                  <div><Label>Completed Qty *</Label><Input type="number" max={e.receivedQty} value={completeForm.completedQty} onChange={ev => setCompleteForm({ ...completeForm, completedQty: ev.target.value })} /></div>
                                   <div><Label>Waste Qty</Label><Input type="number" value={completeForm.wasteQty} onChange={ev => setCompleteForm({ ...completeForm, wasteQty: ev.target.value })} /></div>
                                   <div><Label>Waste Reason</Label><Input value={completeForm.wasteReason} onChange={ev => setCompleteForm({ ...completeForm, wasteReason: ev.target.value })} /></div>
                                   <Button className="w-full" onClick={() => handleComplete(e.id)}>Mark Complete</Button>
@@ -237,7 +316,7 @@ export default function OverlockButton() {
                               </DialogContent>
                             </Dialog>
                           )}
-                          <Button variant="ghost" size="icon" onClick={() => { if (confirm("Delete?")) apiDelete(`/overlock-button/${e.id}`).then(fetchEntries); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => { if (confirm("Delete?")) apiDelete(`/overlock-button/${e.id}`).then(() => { fetchEntries(); setPoolKey(k => k + 1); }); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                         </div>
                       </TableCell>
                     </TableRow>

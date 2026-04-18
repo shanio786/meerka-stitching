@@ -9,11 +9,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, CheckCircle, Trash2, Search } from "lucide-react";
+import { Plus, CheckCircle, Trash2, Search, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { format } from "date-fns";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { PendingPoolCard, type PendingRow } from "@/components/PendingPoolCard";
+import { printJobCard } from "@/components/JobCard";
 
 interface FinishingEntry {
   id: number;
@@ -23,6 +25,9 @@ interface FinishingEntry {
   masterId: number | null;
   masterName: string | null;
   workerName: string;
+  componentName: string | null;
+  size: string | null;
+  receivedFrom: string | null;
   receivedQty: number;
   packedQty: number | null;
   wasteQty: number | null;
@@ -32,10 +37,13 @@ interface FinishingEntry {
   receivedBy: string | null;
   status: string;
   date: string;
+  notes: string | null;
 }
 
 interface ArticleOption { id: number; articleCode: string; articleName: string; }
 interface MasterOption { id: number; name: string; masterType: string; }
+
+const emptyForm = { articleId: "", masterId: "", workerName: "", componentName: "", size: "", receivedFrom: "", receivedQty: "", ratePerPiece: "", receivedBy: "", notes: "", date: new Date().toISOString().split("T")[0] };
 
 export default function FinishingEntries() {
   const [entries, setEntries] = useState<FinishingEntry[]>([]);
@@ -46,9 +54,10 @@ export default function FinishingEntries() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [completeDialog, setCompleteDialog] = useState<number | null>(null);
+  const [poolKey, setPoolKey] = useState(0);
   const { toast } = useToast();
 
-  const [form, setForm] = useState({ articleId: "", masterId: "", workerName: "", componentName: "", size: "", receivedFrom: "", receivedQty: "", ratePerPiece: "", receivedBy: "", notes: "", date: new Date().toISOString().split("T")[0] });
+  const [form, setForm] = useState(emptyForm);
   const [completeForm, setCompleteForm] = useState({ packedQty: "", wasteQty: "", wasteReason: "" });
 
   const fetchEntries = async () => {
@@ -68,6 +77,18 @@ export default function FinishingEntries() {
     apiGet<MasterOption[]>("/masters?active=true").then(setMasters).catch(() => {});
   }, [statusFilter]);
 
+  const handlePoolReceive = (row: PendingRow) => {
+    setForm({
+      ...emptyForm,
+      articleId: String(row.articleId),
+      componentName: row.componentName || "",
+      size: row.size || "",
+      receivedQty: String(row.available),
+      receivedFrom: row.inspectorName ? `QC - ${row.inspectorName}` : "QC Dept",
+    });
+    setDialogOpen(true);
+  };
+
   const handleCreate = async () => {
     if (!form.articleId || !form.workerName || !form.receivedQty) { toast({ title: "Fill required fields", variant: "destructive" }); return; }
     try {
@@ -82,8 +103,9 @@ export default function FinishingEntries() {
       });
       toast({ title: "Finishing entry added" });
       setDialogOpen(false);
-      setForm({ articleId: "", masterId: "", workerName: "", componentName: "", size: "", receivedFrom: "", receivedQty: "", ratePerPiece: "", receivedBy: "", notes: "", date: new Date().toISOString().split("T")[0] });
+      setForm(emptyForm);
       fetchEntries();
+      setPoolKey(k => k + 1);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to create";
       toast({ title: "Error", description: msg, variant: "destructive" });
@@ -101,10 +123,45 @@ export default function FinishingEntries() {
       setCompleteDialog(null);
       setCompleteForm({ packedQty: "", wasteQty: "", wasteReason: "" });
       fetchEntries();
+      setPoolKey(k => k + 1);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to complete";
       toast({ title: "Error", description: msg, variant: "destructive" });
     }
+  };
+
+  const handlePrintJobCard = (e: FinishingEntry) => {
+    void printJobCard({
+      title: "Finishing Job Card",
+      subtitle: `${e.articleName} (${e.articleCode})`,
+      jobNumber: `FN-${e.id}`,
+      date: format(new Date(e.date), "PPP"),
+      sections: [
+        {
+          heading: "Assignment",
+          rows: [
+            { label: "Worker", value: e.workerName },
+            { label: "Master (linked)", value: e.masterName || "-" },
+            { label: "Component", value: e.componentName || "-" },
+            { label: "Size", value: e.size || "-" },
+            { label: "Received From", value: e.receivedFrom || "-" },
+            { label: "Received By", value: e.receivedBy || "-" },
+          ],
+        },
+        {
+          heading: "Quantities",
+          rows: [
+            { label: "Received", value: e.receivedQty },
+            { label: "Packed", value: e.packedQty ?? "-" },
+            { label: "Waste", value: e.wasteQty ?? "-" },
+            { label: "Rate/Piece", value: e.ratePerPiece ? `Rs.${e.ratePerPiece}` : "-" },
+            { label: "Total Amount", value: e.totalAmount ? `Rs.${e.totalAmount.toLocaleString()}` : "-" },
+            { label: "Status", value: e.status },
+          ],
+        },
+      ],
+      footerNote: e.notes || undefined,
+    });
   };
 
   const filtered = entries.filter(e => {
@@ -118,12 +175,12 @@ export default function FinishingEntries() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Finishing" description="Track pressing, folding, packing and finishing work" actions={
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4" /> New Entry</Button></DialogTrigger>
+      <PageHeader title="Finishing" description="QC ke baad pieces — pressing, folding, packing yahan track karein" actions={
+        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setForm(emptyForm); }}>
+          <DialogTrigger asChild><Button data-testid="button-new-finishing"><Plus className="mr-2 h-4 w-4" /> New Entry</Button></DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>Add Finishing Entry</DialogTitle></DialogHeader>
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
               <div><Label>Article *</Label>
                 <SearchableSelect options={articleOptions} value={form.articleId} onValueChange={v => setForm({ ...form, articleId: v })} placeholder="Search & select article" searchPlaceholder="Type article name or code..." />
               </div>
@@ -148,7 +205,7 @@ export default function FinishingEntries() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Received By</Label><Input value={form.receivedBy} onChange={e => setForm({ ...form, receivedBy: e.target.value })} placeholder="Person who received pieces" /></div>
-                <div><Label>Received From</Label><Input value={form.receivedFrom} onChange={e => setForm({ ...form, receivedFrom: e.target.value })} placeholder="e.g. QC Dept" /></div>
+                <div><Label>Received From</Label><Input value={form.receivedFrom} onChange={e => setForm({ ...form, receivedFrom: e.target.value })} placeholder="e.g. QC - Inspector name" /></div>
               </div>
               <div><Label>Date *</Label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
               <div><Label>Notes</Label><Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
@@ -157,6 +214,15 @@ export default function FinishingEntries() {
           </DialogContent>
         </Dialog>
       } />
+
+      <PendingPoolCard
+        title="Pending from QC"
+        description="QC pass ho chuke pieces — yahan finishing ke liye receive karein."
+        endpoint="/finishing/pending-from-qc"
+        fromLabel="Inspector"
+        onReceive={handlePoolReceive}
+        refreshKey={poolKey}
+      />
 
       <Card>
         <CardContent className="pt-6">
@@ -183,7 +249,10 @@ export default function FinishingEntries() {
                     <TableHead>Date</TableHead>
                     <TableHead>Article</TableHead>
                     <TableHead>Worker</TableHead>
-                    <TableHead className="text-center">Received</TableHead>
+                    <TableHead>Component</TableHead>
+                    <TableHead>Size</TableHead>
+                    <TableHead>From</TableHead>
+                    <TableHead className="text-center">Recvd</TableHead>
                     <TableHead className="text-center">Packed</TableHead>
                     <TableHead className="text-center">Waste</TableHead>
                     <TableHead>Rate</TableHead>
@@ -198,9 +267,12 @@ export default function FinishingEntries() {
                       <TableCell>{format(new Date(e.date), "MMM d")}</TableCell>
                       <TableCell><div className="font-medium">{e.articleName}</div><div className="text-xs text-muted-foreground">{e.articleCode}</div></TableCell>
                       <TableCell>{e.workerName}{e.masterName ? <span className="text-xs text-muted-foreground block">{e.masterName}</span> : null}</TableCell>
+                      <TableCell>{e.componentName || "-"}</TableCell>
+                      <TableCell>{e.size ? <Badge variant="secondary">{e.size}</Badge> : "-"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate" title={e.receivedFrom || ""}>{e.receivedFrom || "-"}</TableCell>
                       <TableCell className="text-center">{e.receivedQty}</TableCell>
                       <TableCell className="text-center">{e.packedQty || "-"}</TableCell>
-                      <TableCell className="text-center">{e.wasteQty || "-"}</TableCell>
+                      <TableCell className="text-center text-destructive">{e.wasteQty || "-"}</TableCell>
                       <TableCell>{e.ratePerPiece ? `Rs.${e.ratePerPiece}` : "-"}</TableCell>
                       <TableCell className="font-mono">{e.totalAmount ? `Rs.${e.totalAmount.toLocaleString()}` : "-"}</TableCell>
                       <TableCell>
@@ -213,13 +285,21 @@ export default function FinishingEntries() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => handlePrintJobCard(e)} title="Print Job Card" data-testid={`button-jobcard-${e.id}`}>
+                            <Printer className="h-4 w-4" />
+                          </Button>
                           {e.status !== "completed" && (
                             <Dialog open={completeDialog === e.id} onOpenChange={o => { setCompleteDialog(o ? e.id : null); if (!o) setCompleteForm({ packedQty: "", wasteQty: "", wasteReason: "" }); }}>
-                              <DialogTrigger asChild><Button variant="ghost" size="icon"><CheckCircle className="h-4 w-4 text-green-600" /></Button></DialogTrigger>
+                              <DialogTrigger asChild><Button variant="ghost" size="icon" data-testid={`button-complete-${e.id}`}><CheckCircle className="h-4 w-4 text-green-600" /></Button></DialogTrigger>
                               <DialogContent>
                                 <DialogHeader><DialogTitle>Complete Finishing</DialogTitle></DialogHeader>
                                 <div className="space-y-4">
-                                  <div><Label>Packed Qty *</Label><Input type="number" value={completeForm.packedQty} onChange={ev => setCompleteForm({ ...completeForm, packedQty: ev.target.value })} /></div>
+                                  <div className="text-sm bg-muted/50 p-3 rounded-md">
+                                    <div><span className="text-muted-foreground">Article:</span> <span className="font-medium">{e.articleName}</span></div>
+                                    <div><span className="text-muted-foreground">Worker:</span> <span className="font-medium">{e.workerName}</span></div>
+                                    <div><span className="text-muted-foreground">Received:</span> <span className="font-medium">{e.receivedQty} pcs</span></div>
+                                  </div>
+                                  <div><Label>Packed Qty *</Label><Input type="number" max={e.receivedQty} value={completeForm.packedQty} onChange={ev => setCompleteForm({ ...completeForm, packedQty: ev.target.value })} /></div>
                                   <div><Label>Waste Qty</Label><Input type="number" value={completeForm.wasteQty} onChange={ev => setCompleteForm({ ...completeForm, wasteQty: ev.target.value })} /></div>
                                   <div><Label>Waste Reason</Label><Input value={completeForm.wasteReason} onChange={ev => setCompleteForm({ ...completeForm, wasteReason: ev.target.value })} /></div>
                                   <Button className="w-full" onClick={() => handleComplete(e.id)}>Mark Complete</Button>
@@ -227,7 +307,7 @@ export default function FinishingEntries() {
                               </DialogContent>
                             </Dialog>
                           )}
-                          <Button variant="ghost" size="icon" onClick={() => { if (confirm("Delete?")) apiDelete(`/finishing/${e.id}`).then(fetchEntries); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => { if (confirm("Delete?")) apiDelete(`/finishing/${e.id}`).then(() => { fetchEntries(); setPoolKey(k => k + 1); }); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                         </div>
                       </TableCell>
                     </TableRow>

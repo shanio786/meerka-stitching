@@ -8,11 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Trash2, Package, Search } from "lucide-react";
+import { Plus, Trash2, Package, Search, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, apiDelete } from "@/lib/api";
 import { format } from "date-fns";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { PendingPoolCard, type PendingRow } from "@/components/PendingPoolCard";
+import { printJobCard } from "@/components/JobCard";
 
 interface StoreEntry {
   id: number;
@@ -29,15 +31,18 @@ interface StoreEntry {
 
 interface ArticleOption { id: number; articleCode: string; articleName: string; }
 
+const emptyForm = { articleId: "", receivedBy: "", receivedFrom: "", size: "", packedQty: "", notes: "", date: new Date().toISOString().split("T")[0] };
+
 export default function FinalStore() {
   const [entries, setEntries] = useState<StoreEntry[]>([]);
   const [articles, setArticles] = useState<ArticleOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [poolKey, setPoolKey] = useState(0);
   const { toast } = useToast();
 
-  const [form, setForm] = useState({ articleId: "", receivedBy: "", receivedFrom: "", size: "", packedQty: "", notes: "", date: new Date().toISOString().split("T")[0] });
+  const [form, setForm] = useState(emptyForm);
 
   const fetchEntries = async () => {
     setLoading(true);
@@ -53,6 +58,17 @@ export default function FinalStore() {
     apiGet<ArticleOption[]>("/articles").then(setArticles).catch(() => {});
   }, []);
 
+  const handlePoolReceive = (row: PendingRow) => {
+    setForm({
+      ...emptyForm,
+      articleId: String(row.articleId),
+      size: row.size || "",
+      packedQty: String(row.available),
+      receivedFrom: row.workerName ? `Finishing - ${row.workerName}` : "Finishing Dept",
+    });
+    setDialogOpen(true);
+  };
+
   const handleCreate = async () => {
     if (!form.articleId || !form.receivedBy || !form.receivedFrom || !form.packedQty) { toast({ title: "Fill required fields", variant: "destructive" }); return; }
     try {
@@ -62,12 +78,34 @@ export default function FinalStore() {
       });
       toast({ title: "Receipt added to final store" });
       setDialogOpen(false);
-      setForm({ articleId: "", receivedBy: "", receivedFrom: "", size: "", packedQty: "", notes: "", date: new Date().toISOString().split("T")[0] });
+      setForm(emptyForm);
       fetchEntries();
+      setPoolKey(k => k + 1);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to create";
       toast({ title: "Error", description: msg, variant: "destructive" });
     }
+  };
+
+  const handlePrintJobCard = (e: StoreEntry) => {
+    void printJobCard({
+      title: "Final Store Receipt",
+      subtitle: `${e.articleName} (${e.articleCode})`,
+      jobNumber: `FS-${e.id}`,
+      date: format(new Date(e.date), "PPP"),
+      sections: [
+        {
+          heading: "Receipt Details",
+          rows: [
+            { label: "Received By", value: e.receivedBy },
+            { label: "Received From", value: e.receivedFrom },
+            { label: "Size", value: e.size || "All" },
+            { label: "Packed Qty", value: e.packedQty },
+          ],
+        },
+      ],
+      footerNote: e.notes || undefined,
+    });
   };
 
   const filtered = entries.filter(e => {
@@ -81,9 +119,9 @@ export default function FinalStore() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Final Store" description="Finished goods received and stored - ready for dispatch" actions={
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4" /> Receive Stock</Button></DialogTrigger>
+      <PageHeader title="Final Store" description="Finished pieces receive aur store karein — dispatch ke liye ready" actions={
+        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setForm(emptyForm); }}>
+          <DialogTrigger asChild><Button data-testid="button-receive-stock"><Plus className="mr-2 h-4 w-4" /> Receive Stock</Button></DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>Receive in Final Store</DialogTitle></DialogHeader>
             <div className="space-y-4">
@@ -92,7 +130,7 @@ export default function FinalStore() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Received By *</Label><Input value={form.receivedBy} onChange={e => setForm({ ...form, receivedBy: e.target.value })} /></div>
-                <div><Label>Received From *</Label><Input value={form.receivedFrom} onChange={e => setForm({ ...form, receivedFrom: e.target.value })} placeholder="e.g. Finishing Dept" /></div>
+                <div><Label>Received From *</Label><Input value={form.receivedFrom} onChange={e => setForm({ ...form, receivedFrom: e.target.value })} placeholder="e.g. Finishing - Worker" /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Size</Label>
@@ -110,6 +148,16 @@ export default function FinalStore() {
           </DialogContent>
         </Dialog>
       } />
+
+      <PendingPoolCard
+        title="Pending from Finishing"
+        description="Finishing complete ho chuke pieces — yahan store mein receive karein."
+        endpoint="/final-store/pending-from-finishing"
+        fromLabel="Worker"
+        showComponent={false}
+        onReceive={handlePoolReceive}
+        refreshKey={poolKey}
+      />
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card><CardContent className="pt-6"><div className="text-sm text-muted-foreground flex items-center gap-1"><Package className="h-4 w-4" /> Total Packed in Store</div><div className="text-2xl font-bold">{totalPacked.toLocaleString()} pcs</div></CardContent></Card>
@@ -152,8 +200,15 @@ export default function FinalStore() {
                     <TableCell>{e.receivedFrom}</TableCell>
                     <TableCell>{e.size || "All"}</TableCell>
                     <TableCell className="text-center font-mono font-medium">{e.packedQty}</TableCell>
-                    <TableCell className="max-w-[120px] truncate">{e.notes || "-"}</TableCell>
-                    <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => { if (confirm("Delete?")) apiDelete(`/final-store/${e.id}`).then(fetchEntries); }}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
+                    <TableCell className="max-w-[120px] truncate" title={e.notes || ""}>{e.notes || "-"}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => handlePrintJobCard(e)} title="Print Receipt" data-testid={`button-jobcard-${e.id}`}>
+                          <Printer className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => { if (confirm("Delete?")) apiDelete(`/final-store/${e.id}`).then(() => { fetchEntries(); setPoolKey(k => k + 1); }); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

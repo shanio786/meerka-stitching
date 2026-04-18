@@ -1,8 +1,57 @@
 import { Router, type IRouter } from "express";
 import { eq, and, sql } from "drizzle-orm";
-import { db, finishingEntriesTable, articlesTable, mastersTable, masterAccountsTable, masterTransactionsTable } from "@workspace/db";
+import { db, finishingEntriesTable, articlesTable, mastersTable, masterAccountsTable, masterTransactionsTable, qcEntriesTable } from "@workspace/db";
 
 const router: IRouter = Router();
+
+// Pending pool for Finishing: pieces passed at QC minus already received at Finishing.
+router.get("/finishing/pending-from-qc", async (req, res): Promise<void> => {
+  const { articleId } = req.query;
+  const passed = await db
+    .select({
+      articleId: qcEntriesTable.articleId,
+      articleCode: articlesTable.articleCode,
+      articleName: articlesTable.articleName,
+      componentName: qcEntriesTable.componentName,
+      size: qcEntriesTable.size,
+      inspectorName: qcEntriesTable.inspectorName,
+      passed: sql<number>`COALESCE(SUM(${qcEntriesTable.passedQty}), 0)`.as("passed"),
+      lastDate: sql<string>`MAX(${qcEntriesTable.date})`.as("last_date"),
+    })
+    .from(qcEntriesTable)
+    .leftJoin(articlesTable, eq(articlesTable.id, qcEntriesTable.articleId))
+    .where(articleId ? eq(qcEntriesTable.articleId, Number(articleId)) : sql`TRUE`)
+    .groupBy(
+      qcEntriesTable.articleId, articlesTable.articleCode, articlesTable.articleName,
+      qcEntriesTable.componentName, qcEntriesTable.size, qcEntriesTable.inspectorName,
+    );
+
+  const received = await db
+    .select({
+      articleId: finishingEntriesTable.articleId,
+      componentName: finishingEntriesTable.componentName,
+      size: finishingEntriesTable.size,
+      received: sql<number>`COALESCE(SUM(${finishingEntriesTable.receivedQty}), 0)`.as("received"),
+    })
+    .from(finishingEntriesTable)
+    .groupBy(finishingEntriesTable.articleId, finishingEntriesTable.componentName, finishingEntriesTable.size);
+
+  const sorted = [...passed].sort((a, b) => (a.lastDate || "").localeCompare(b.lastDate || ""));
+  const consumedBucket = new Map<string, number>();
+  const result = sorted.map((p) => {
+    const key = `${p.articleId}|${p.componentName || ""}|${p.size || ""}`;
+    const totalReceived = Number(received.find((r) => r.articleId === p.articleId && (r.componentName || "") === (p.componentName || "") && (r.size || "") === (p.size || ""))?.received ?? 0);
+    const alreadyConsumed = consumedBucket.get(key) ?? 0;
+    const remaining = Math.max(0, totalReceived - alreadyConsumed);
+    const passedQty = Number(p.passed);
+    const consumeFromThis = Math.min(passedQty, remaining);
+    consumedBucket.set(key, alreadyConsumed + consumeFromThis);
+    const available = passedQty - consumeFromThis;
+    return { ...p, passed: passedQty, available };
+  }).filter((r) => r.available > 0);
+
+  res.json(result);
+});
 
 router.get("/finishing", async (req, res): Promise<void> => {
   const { articleId, status } = req.query;

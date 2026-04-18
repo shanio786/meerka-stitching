@@ -1,8 +1,68 @@
 import { Router, type IRouter } from "express";
-import { eq, and, sql } from "drizzle-orm";
-import { db, overlockButtonEntriesTable, articlesTable, mastersTable, masterAccountsTable, masterTransactionsTable } from "@workspace/db";
+import { eq, and, sql, ne } from "drizzle-orm";
+import { db, overlockButtonEntriesTable, articlesTable, mastersTable, masterAccountsTable, masterTransactionsTable, stitchingAssignmentsTable } from "@workspace/db";
 
 const router: IRouter = Router();
+
+// Pending pool: pieces completed at Stitching but not yet received at Overlock/Button.
+// Aggregated by article + component + size + stitching-master.
+router.get("/overlock-button/pending-from-stitching", async (req, res): Promise<void> => {
+  const { articleId } = req.query;
+  const conditions = [eq(stitchingAssignmentsTable.status, "completed")];
+
+  const stitched = await db
+    .select({
+      articleId: sql<number>`${articlesTable.id}`.as("article_id"),
+      articleCode: articlesTable.articleCode,
+      articleName: articlesTable.articleName,
+      componentName: stitchingAssignmentsTable.componentName,
+      size: stitchingAssignmentsTable.size,
+      masterId: stitchingAssignmentsTable.masterId,
+      masterName: mastersTable.name,
+      completed: sql<number>`COALESCE(SUM(${stitchingAssignmentsTable.piecesCompleted}), 0)`.as("completed"),
+      lastDate: sql<string>`MAX(${stitchingAssignmentsTable.completedDate})`.as("last_date"),
+    })
+    .from(stitchingAssignmentsTable)
+    .innerJoin(sql`stitching_jobs sj`, sql`sj.id = ${stitchingAssignmentsTable.jobId}`)
+    .innerJoin(articlesTable, sql`${articlesTable.id} = sj.article_id`)
+    .leftJoin(mastersTable, eq(mastersTable.id, stitchingAssignmentsTable.masterId))
+    .where(and(...conditions, articleId ? sql`sj.article_id = ${Number(articleId)}` : sql`TRUE`))
+    .groupBy(
+      articlesTable.id, articlesTable.articleCode, articlesTable.articleName,
+      stitchingAssignmentsTable.componentName, stitchingAssignmentsTable.size,
+      stitchingAssignmentsTable.masterId, mastersTable.name,
+    );
+
+  // How much already received at overlock for each (article, component, size)
+  const received = await db
+    .select({
+      articleId: overlockButtonEntriesTable.articleId,
+      componentName: overlockButtonEntriesTable.componentName,
+      size: overlockButtonEntriesTable.size,
+      received: sql<number>`COALESCE(SUM(${overlockButtonEntriesTable.receivedQty}), 0)`.as("received"),
+    })
+    .from(overlockButtonEntriesTable)
+    .where(ne(overlockButtonEntriesTable.status, "cancelled"))
+    .groupBy(overlockButtonEntriesTable.articleId, overlockButtonEntriesTable.componentName, overlockButtonEntriesTable.size);
+
+  // Distribute the "received" total across master rows for the same (article, component, size).
+  // We allocate FIFO by lastDate so the oldest stitched batch is consumed first.
+  const stitchedSorted = [...stitched].sort((a, b) => (a.lastDate || "").localeCompare(b.lastDate || ""));
+  const consumedBucket = new Map<string, number>();
+  const result = stitchedSorted.map((s) => {
+    const key = `${s.articleId}|${s.componentName || ""}|${s.size || ""}`;
+    const totalReceived = Number(received.find((r) => r.articleId === s.articleId && (r.componentName || "") === (s.componentName || "") && (r.size || "") === (s.size || ""))?.received ?? 0);
+    const alreadyConsumed = consumedBucket.get(key) ?? 0;
+    const remaining = Math.max(0, totalReceived - alreadyConsumed);
+    const completed = Number(s.completed);
+    const consumeFromThis = Math.min(completed, remaining);
+    consumedBucket.set(key, alreadyConsumed + consumeFromThis);
+    const available = completed - consumeFromThis;
+    return { ...s, completed, available };
+  }).filter((r) => r.available > 0);
+
+  res.json(result);
+});
 
 router.get("/overlock-button", async (req, res): Promise<void> => {
   const { articleId, taskType, status } = req.query;
