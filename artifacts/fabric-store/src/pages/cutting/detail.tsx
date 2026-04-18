@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, CheckCircle, Trash2, ArrowLeft, AlertTriangle, Send } from "lucide-react";
+import { Plus, CheckCircle, Trash2, ArrowLeft, AlertTriangle, Send, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { format } from "date-fns";
@@ -149,9 +149,14 @@ export default function CuttingDetail() {
     if (!r.fabricGiven) return null;
     if (isNaN(g) || g <= 0) return "Invalid fabric amount";
     if (g > r.available + 0.001) return `Only ${r.available.toFixed(2)}m available`;
+    return null;
+  };
+
+  const warnRow = (r: ComponentRow): string | null => {
+    if (!r.fabricGiven) return null;
     const est = calcEstimated(r);
     if (job?.demandPieces && est !== null && est < job.demandPieces) {
-      return `Only ${est} pcs possible — demand is ${job.demandPieces}`;
+      return `Only ${est} pcs possible — demand is ${job.demandPieces}. OK if splitting across masters.`;
     }
     return null;
   };
@@ -234,6 +239,123 @@ export default function CuttingDetail() {
   const addSizeRow = () => setSizes([...sizes, { size: "M", quantity: "" }]);
   const removeSizeRow = (idx: number) => setSizes(sizes.filter((_, i) => i !== idx));
 
+  const handlePrintJobCard = () => {
+    if (!job) return;
+    const totalFabric = job.assignments.reduce((s, a) => s + a.fabricGivenMeters, 0);
+    const totalEst = job.assignments.reduce((s, a) => s + (a.estimatedPieces || 0), 0);
+    const totalCut2 = job.assignments.reduce((s, a) => s + (a.piecesCut || 0), 0);
+    const totalAmt = job.assignments.reduce((s, a) => s + (a.totalAmount || 0), 0);
+    const masterGroups: Record<string, Assignment[]> = {};
+    for (const a of job.assignments) {
+      if (!masterGroups[a.masterName]) masterGroups[a.masterName] = [];
+      masterGroups[a.masterName].push(a);
+    }
+    const sizesAggregated: Record<string, number> = {};
+    for (const a of job.assignments) {
+      for (const s of a.sizes || []) {
+        sizesAggregated[s.size] = (sizesAggregated[s.size] || 0) + s.quantity;
+      }
+    }
+    const html = `<!DOCTYPE html><html><head><title>Cutting Job Card CUT-${String(job.id).padStart(4, "0")}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; margin: 0; padding: 24px; color: #111; font-size: 12px; }
+  .header { text-align: center; border-bottom: 3px double #000; padding-bottom: 12px; margin-bottom: 16px; }
+  .header h1 { margin: 0; font-size: 22px; letter-spacing: 1px; }
+  .header .sub { font-size: 11px; color: #555; margin-top: 4px; }
+  .meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; padding: 10px; background: #f5f5f5; border: 1px solid #ddd; }
+  .meta div { font-size: 12px; }
+  .meta strong { display: block; font-size: 10px; color: #666; text-transform: uppercase; margin-bottom: 2px; }
+  h2 { font-size: 14px; margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #999; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+  th, td { border: 1px solid #999; padding: 6px 8px; text-align: left; font-size: 11px; }
+  th { background: #eee; font-weight: bold; }
+  .right { text-align: right; }
+  .center { text-align: center; }
+  .totals-row { background: #f0f0f0; font-weight: bold; }
+  .signatures { margin-top: 32px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .sig-box { border-top: 1px solid #000; padding-top: 4px; text-align: center; font-size: 11px; }
+  .footer { margin-top: 24px; padding-top: 8px; border-top: 1px solid #ccc; text-align: center; font-size: 10px; color: #666; }
+  .badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 10px; background: #ddd; }
+  @media print { body { padding: 12px; } .no-print { display: none !important; } }
+</style></head><body>
+<div class="header">
+  <h1>CUTTING JOB CARD</h1>
+  <div class="sub">Stitching ERP — Production Slip</div>
+</div>
+<div class="meta">
+  <div><strong>Job No.</strong>CUT-${String(job.id).padStart(4, "0")}</div>
+  <div><strong>Date</strong>${format(new Date(job.jobDate), "dd MMM yyyy")}</div>
+  <div><strong>Status</strong><span class="badge">${job.status.replace("_", " ").toUpperCase()}</span></div>
+  <div><strong>Article Code</strong>${job.articleCode}</div>
+  <div><strong>Article Name</strong>${job.articleName}</div>
+  <div><strong>Demand</strong>${job.demandPieces || "-"} ${job.demandPieces ? "pcs/suits" : ""}</div>
+</div>
+${job.notes ? `<div style="margin-bottom:12px;padding:8px;background:#fffbe5;border:1px solid #f0e3a0;font-size:11px"><strong>Notes:</strong> ${job.notes}</div>` : ""}
+
+<h2>Master Assignments &amp; Cutting Details</h2>
+<table>
+  <thead><tr>
+    <th>Master</th><th>Component</th><th>Fabric</th>
+    <th class="right">Given (m)</th><th class="right">Per Pc</th><th class="right">Est.</th>
+    <th class="right">Rate</th><th class="right">Cut</th><th class="right">Waste</th>
+    <th class="right">Returned</th><th class="right">Amount</th><th>Handover</th>
+  </tr></thead>
+  <tbody>
+    ${job.assignments.map((a) => `<tr>
+      <td>${a.masterName}</td>
+      <td>${a.componentName}</td>
+      <td>${a.fabricType || "-"}</td>
+      <td class="right">${a.fabricGivenMeters}</td>
+      <td class="right">${a.fabricPerPiece || "-"}</td>
+      <td class="right">${a.estimatedPieces || "-"}</td>
+      <td class="right">${a.ratePerPiece ? `Rs.${a.ratePerPiece}/pc` : a.ratePerSuit ? `Rs.${a.ratePerSuit}/suit` : "bundled"}</td>
+      <td class="right">${a.piecesCut || "-"}</td>
+      <td class="right">${a.wasteMeters || "-"}</td>
+      <td class="right">${a.fabricReturnedMeters || "-"}</td>
+      <td class="right">${a.totalAmount ? `Rs.${a.totalAmount.toLocaleString()}` : "-"}</td>
+      <td>${a.status === "completed" ? `${HANDOVER_LABEL[a.handoverStatus]}${a.receivedBy ? ` → ${a.receivedBy}` : ""}` : "-"}</td>
+    </tr>`).join("")}
+    <tr class="totals-row">
+      <td colspan="3">TOTAL</td>
+      <td class="right">${totalFabric}</td>
+      <td></td>
+      <td class="right">${totalEst}</td>
+      <td></td>
+      <td class="right">${totalCut2}</td>
+      <td></td>
+      <td></td>
+      <td class="right">Rs.${totalAmt.toLocaleString()}</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+${Object.keys(sizesAggregated).length > 0 ? `
+<h2>Size Breakdown (Total Across All Components)</h2>
+<table>
+  <thead><tr>${Object.keys(sizesAggregated).map((s) => `<th class="center">${s}</th>`).join("")}<th class="center">TOTAL</th></tr></thead>
+  <tbody><tr>${Object.values(sizesAggregated).map((q) => `<td class="center">${q}</td>`).join("")}<td class="center"><strong>${Object.values(sizesAggregated).reduce((a, b) => a + b, 0)}</strong></td></tr></tbody>
+</table>` : ""}
+
+<div class="signatures">
+  <div class="sig-box">Cutting Master Signature</div>
+  <div class="sig-box">Store Keeper Signature</div>
+  <div class="sig-box">Authorized By</div>
+</div>
+
+<div class="footer">
+  Powered by Devoria Tech &nbsp;|&nbsp; +923117597815 &nbsp;|&nbsp; Printed on ${format(new Date(), "dd MMM yyyy, HH:mm")}
+</div>
+
+<div class="no-print" style="text-align:center;margin-top:20px"><button onclick="window.print()" style="padding:8px 16px;font-size:13px;cursor:pointer">Print</button></div>
+<script>setTimeout(() => window.print(), 300);</script>
+</body></html>`;
+    const w = window.open("", "_blank", "width=900,height=700");
+    if (w) { w.document.write(html); w.document.close(); }
+    else { toast({ title: "Pop-up blocked", description: "Please allow pop-ups to print", variant: "destructive" }); }
+  };
+
   if (loading) return <div className="space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-64 w-full" /></div>;
   if (!job) return <div className="text-center py-12 text-muted-foreground">Job not found</div>;
 
@@ -257,6 +379,9 @@ export default function CuttingDetail() {
           <h1 className="text-2xl font-bold">CUT-{String(job.id).padStart(4, "0")}</h1>
           <p className="text-muted-foreground">{job.articleName} ({job.articleCode}){job.demandPieces ? ` — Demand: ${job.demandPieces} pcs` : ""}</p>
         </div>
+        <Button variant="outline" size="sm" onClick={handlePrintJobCard}>
+          <Printer className="h-4 w-4 mr-2" /> Print Job Card
+        </Button>
         {job.status !== "completed" && (
           <Select value={job.status} onValueChange={handleUpdateStatus}>
             <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
@@ -326,8 +451,9 @@ export default function CuttingDetail() {
                         {rows.map((r, i) => {
                           const est = calcEstimated(r);
                           const err = validateRow(r);
+                          const warn = !err ? warnRow(r) : null;
                           return (
-                            <div key={i} className={`border rounded-lg p-3 ${r.selected ? "bg-blue-50/50 border-blue-200" : ""} ${err ? "border-red-300 bg-red-50/30" : ""}`}>
+                            <div key={i} className={`border rounded-lg p-3 ${r.selected ? "bg-blue-50/50 border-blue-200" : ""} ${err ? "border-red-300 bg-red-50/30" : ""} ${warn ? "border-yellow-300 bg-yellow-50/30" : ""}`}>
                               <div className="flex items-center gap-3">
                                 <input type="checkbox" checked={r.selected} onChange={(e) => updateRow(i, { selected: e.target.checked })} className="h-4 w-4" />
                                 <div className="flex-1">
@@ -358,6 +484,11 @@ export default function CuttingDetail() {
                                   {err && (
                                     <div className="col-span-full text-xs text-red-600 flex items-center gap-1">
                                       <AlertTriangle className="h-3 w-3" /> {err}
+                                    </div>
+                                  )}
+                                  {warn && (
+                                    <div className="col-span-full text-xs text-yellow-700 flex items-center gap-1">
+                                      <AlertTriangle className="h-3 w-3" /> {warn}
                                     </div>
                                   )}
                                 </div>

@@ -143,10 +143,8 @@ router.post("/cutting/assignments", async (req, res): Promise<void> => {
         res.status(400).json({ error: `Not enough fabric for "${item.componentName}". Available: ${available.toFixed(2)}m, requested: ${fabricGiven}m` });
         return;
       }
-      if (job.demandPieces && item.estimatedPieces && Number(item.estimatedPieces) < job.demandPieces) {
-        res.status(400).json({ error: `Estimated pieces for "${item.componentName}" (${item.estimatedPieces}) is less than demand (${job.demandPieces}). Increase fabric or reduce demand.` });
-        return;
-      }
+      // Demand check is now a warning on the frontend, not a hard block,
+      // because cutting can be split across multiple masters.
     }
 
     const result = await db.transaction(async (tx) => {
