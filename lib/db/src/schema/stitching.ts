@@ -1,7 +1,7 @@
 import { pgTable, text, serial, timestamp, doublePrecision, integer } from "drizzle-orm/pg-core";
 import { articlesTable } from "./articles";
 import { mastersTable } from "./masters";
-import { cuttingJobsTable } from "./cutting";
+import { cuttingJobsTable, cuttingAssignmentsTable } from "./cutting";
 import { jobStatusEnum } from "./cutting";
 
 export const stitchingJobsTable = pgTable("stitching_jobs", {
@@ -20,10 +20,12 @@ export const stitchingAssignmentsTable = pgTable("stitching_assignments", {
   id: serial("id").primaryKey(),
   jobId: integer("job_id").notNull().references(() => stitchingJobsTable.id, { onDelete: "cascade" }),
   masterId: integer("master_id").notNull().references(() => mastersTable.id),
+  cuttingAssignmentId: integer("cutting_assignment_id").references(() => cuttingAssignmentsTable.id),
   componentName: text("component_name").notNull(),
   size: text("size"),
   quantityGiven: integer("quantity_given").notNull(),
-  ratePerPiece: doublePrecision("rate_per_piece").notNull(),
+  ratePerPiece: doublePrecision("rate_per_piece"),
+  ratePerSuit: doublePrecision("rate_per_suit"),
   status: jobStatusEnum("status").notNull().default("pending"),
   notes: text("notes"),
   assignedDate: timestamp("assigned_date", { withTimezone: true }).notNull().defaultNow(),

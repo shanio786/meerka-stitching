@@ -1,8 +1,44 @@
 import { Router, type IRouter } from "express";
-import { eq, and, sql, type SQL } from "drizzle-orm";
-import { db, stitchingJobsTable, stitchingAssignmentsTable, mastersTable, articlesTable, masterAccountsTable, masterTransactionsTable } from "@workspace/db";
+import { eq, and, sql } from "drizzle-orm";
+import { db, stitchingJobsTable, stitchingAssignmentsTable, mastersTable, articlesTable, masterAccountsTable, masterTransactionsTable, cuttingAssignmentsTable, cuttingJobsTable } from "@workspace/db";
 
 const router: IRouter = Router();
+
+// Pending-from-cutting: cutting assignments completed + handed-over to next stage
+// where pieces remain after subtracting what stitching has already consumed.
+router.get("/stitching/pending-from-cutting", async (req, res): Promise<void> => {
+  const { articleId } = req.query;
+  const conditions = [
+    eq(cuttingAssignmentsTable.status, "completed"),
+    eq(cuttingAssignmentsTable.handoverStatus, "received_by_next"),
+    sql`COALESCE(${cuttingAssignmentsTable.piecesCut}, 0) - COALESCE(${cuttingAssignmentsTable.piecesConsumed}, 0) > 0`,
+  ];
+  if (articleId) conditions.push(eq(cuttingJobsTable.articleId, Number(articleId)));
+
+  const rows = await db
+    .select({
+      cuttingAssignmentId: cuttingAssignmentsTable.id,
+      cuttingJobId: cuttingAssignmentsTable.jobId,
+      articleId: cuttingJobsTable.articleId,
+      articleCode: articlesTable.articleCode,
+      articleName: articlesTable.articleName,
+      componentName: cuttingAssignmentsTable.componentName,
+      cutterMasterId: cuttingAssignmentsTable.masterId,
+      cutterMasterName: mastersTable.name,
+      piecesCut: cuttingAssignmentsTable.piecesCut,
+      piecesConsumed: cuttingAssignmentsTable.piecesConsumed,
+      receivedBy: cuttingAssignmentsTable.receivedBy,
+      handoverDate: cuttingAssignmentsTable.handoverDate,
+    })
+    .from(cuttingAssignmentsTable)
+    .innerJoin(cuttingJobsTable, eq(cuttingJobsTable.id, cuttingAssignmentsTable.jobId))
+    .leftJoin(articlesTable, eq(articlesTable.id, cuttingJobsTable.articleId))
+    .leftJoin(mastersTable, eq(mastersTable.id, cuttingAssignmentsTable.masterId))
+    .where(and(...conditions))
+    .orderBy(sql`${cuttingAssignmentsTable.handoverDate} DESC`);
+
+  res.json(rows.map((r) => ({ ...r, available: (r.piecesCut || 0) - (r.piecesConsumed || 0) })));
+});
 
 router.get("/stitching/jobs", async (req, res): Promise<void> => {
   const { articleId, status } = req.query;
@@ -102,7 +138,84 @@ router.patch("/stitching/jobs/:id", async (req, res): Promise<void> => {
 });
 
 router.post("/stitching/assignments", async (req, res): Promise<void> => {
-  const { jobId, masterId, componentName, size, quantityGiven, ratePerPiece, notes } = req.body;
+  const { jobId, masterId, items, notes, ratePerSuit } = req.body;
+
+  // Batch mode: items[] with cuttingAssignmentId per row, optional ratePerSuit
+  if (Array.isArray(items) && items.length > 0) {
+    if (!jobId || !masterId) { res.status(400).json({ error: "Job and master are required" }); return; }
+
+    // Validate availability per cuttingAssignmentId
+    for (const it of items) {
+      if (!it.componentName || !it.quantityGiven || it.quantityGiven <= 0) {
+        res.status(400).json({ error: `Invalid quantity for ${it.componentName || "row"}` });
+        return;
+      }
+      if (it.cuttingAssignmentId) {
+        const [src] = await db.select().from(cuttingAssignmentsTable).where(eq(cuttingAssignmentsTable.id, it.cuttingAssignmentId));
+        if (!src) { res.status(400).json({ error: `Cutting source not found for ${it.componentName}` }); return; }
+        const available = (src.piecesCut || 0) - (src.piecesConsumed || 0);
+        if (it.quantityGiven > available) {
+          res.status(400).json({ error: `Only ${available} pcs available for ${it.componentName}` });
+          return;
+        }
+      }
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const created = [];
+      let suitRateApplied = false;
+      const componentNames = items.map((i: { componentName: string }) => i.componentName).join(", ");
+
+      for (const it of items) {
+        const useSuitRate = ratePerSuit && !suitRateApplied;
+        const [a] = await tx.insert(stitchingAssignmentsTable).values({
+          jobId, masterId,
+          cuttingAssignmentId: it.cuttingAssignmentId || null,
+          componentName: it.componentName,
+          size: it.size || null,
+          quantityGiven: Number(it.quantityGiven),
+          ratePerPiece: ratePerSuit ? null : (it.ratePerPiece ? Number(it.ratePerPiece) : null),
+          ratePerSuit: useSuitRate ? Number(ratePerSuit) : null,
+          notes: useSuitRate
+            ? `${notes || ""}${notes ? " | " : ""}Suit rate covers: ${componentNames}`
+            : (ratePerSuit ? `Bundled with suit rate (paid via ${items[0].componentName})` : notes),
+        }).returning();
+        if (useSuitRate) suitRateApplied = true;
+        created.push(a);
+
+        if (it.cuttingAssignmentId) {
+          await tx.update(cuttingAssignmentsTable).set({
+            piecesConsumed: sql`${cuttingAssignmentsTable.piecesConsumed} + ${Number(it.quantityGiven)}`,
+          }).where(eq(cuttingAssignmentsTable.id, it.cuttingAssignmentId));
+        }
+      }
+
+      // Backfill cuttingJobId on stitching job from any source
+      const sourceCuttingJobIds = items
+        .filter((i: { cuttingAssignmentId?: number }) => i.cuttingAssignmentId)
+        .map((i: { cuttingAssignmentId: number }) => i.cuttingAssignmentId);
+      if (sourceCuttingJobIds.length > 0) {
+        const sources = await tx.select({ jobId: cuttingAssignmentsTable.jobId })
+          .from(cuttingAssignmentsTable)
+          .where(sql`${cuttingAssignmentsTable.id} IN (${sql.join(sourceCuttingJobIds.map((id: number) => sql`${id}`), sql`, `)})`);
+        if (sources.length > 0) {
+          const [job] = await tx.select().from(stitchingJobsTable).where(eq(stitchingJobsTable.id, jobId));
+          if (job && !job.cuttingJobId) {
+            await tx.update(stitchingJobsTable).set({ cuttingJobId: sources[0].jobId }).where(eq(stitchingJobsTable.id, jobId));
+          }
+        }
+      }
+
+      await tx.update(stitchingJobsTable).set({ status: "in_progress" }).where(eq(stitchingJobsTable.id, jobId));
+      return created;
+    });
+
+    res.status(201).json(result);
+    return;
+  }
+
+  // Legacy single-row mode (backwards compatible)
+  const { componentName, size, quantityGiven, ratePerPiece } = req.body;
   if (!jobId || !masterId || !componentName || !quantityGiven || !ratePerPiece) {
     res.status(400).json({ error: "Missing required fields" });
     return;
@@ -123,7 +236,8 @@ router.patch("/stitching/assignments/:id/complete", async (req, res): Promise<vo
   if (!existing) { res.status(404).json({ error: "Assignment not found" }); return; }
   if (existing.status === "completed") { res.status(400).json({ error: "Assignment already completed" }); return; }
 
-  const totalAmount = (piecesCompleted || 0) * existing.ratePerPiece;
+  const rate = existing.ratePerPiece || existing.ratePerSuit || 0;
+  const totalAmount = (piecesCompleted || 0) * rate;
 
   const result = await db.transaction(async (tx) => {
     const [assignment] = await tx.update(stitchingAssignmentsTable).set({

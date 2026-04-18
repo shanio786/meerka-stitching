@@ -45,6 +45,7 @@ export const cuttingAssignmentsTable = pgTable("cutting_assignments", {
   wasteMeters: doublePrecision("waste_meters"),
   fabricReturnedMeters: doublePrecision("fabric_returned_meters"),
   totalAmount: doublePrecision("total_amount"),
+  piecesConsumed: integer("pieces_consumed").notNull().default(0),
   handoverStatus: handoverStatusEnum("handover_status").notNull().default("with_cutter"),
   receivedBy: text("received_by"),
   handoverDate: timestamp("handover_date", { withTimezone: true }),

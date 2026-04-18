@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Eye, Search } from "lucide-react";
+import { Plus, Eye, Search, ArrowRight, Inbox } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost } from "@/lib/api";
 import { format } from "date-fns";
@@ -33,9 +33,23 @@ interface ArticleOption {
   articleName: string;
 }
 
+interface PendingItem {
+  cuttingAssignmentId: number;
+  cuttingJobId: number;
+  articleId: number;
+  articleCode: string;
+  articleName: string;
+  componentName: string;
+  cutterMasterName: string;
+  available: number;
+  receivedBy: string | null;
+  handoverDate: string | null;
+}
+
 export default function StitchingJobs() {
   const [jobs, setJobs] = useState<StitchingJob[]>([]);
   const [articles, setArticles] = useState<ArticleOption[]>([]);
+  const [pending, setPending] = useState<PendingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -43,6 +57,8 @@ export default function StitchingJobs() {
   const { toast } = useToast();
 
   const [form, setForm] = useState({ articleId: "", supervisorName: "", jobDate: new Date().toISOString().split("T")[0], notes: "" });
+
+  const fetchPending = async () => { try { setPending(await apiGet<PendingItem[]>("/stitching/pending-from-cutting")); } catch {} };
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -57,7 +73,7 @@ export default function StitchingJobs() {
 
   const fetchArticles = async () => { try { const data = await apiGet<ArticleOption[]>("/articles"); setArticles(data); } catch {} };
 
-  useEffect(() => { fetchJobs(); fetchArticles(); }, [statusFilter]);
+  useEffect(() => { fetchJobs(); fetchArticles(); fetchPending(); }, [statusFilter]);
 
   const handleCreate = async () => {
     if (!form.articleId || !form.supervisorName) { toast({ title: "Fill required fields", variant: "destructive" }); return; }
@@ -110,6 +126,56 @@ export default function StitchingJobs() {
           </DialogContent>
         </Dialog>
       } />
+
+      {pending.length > 0 && (
+        <Card className="border-blue-200 bg-blue-50/40">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Inbox className="h-5 w-5 text-blue-600" />
+              <h3 className="font-semibold text-base">Ready for Stitching ({pending.length})</h3>
+              <span className="text-xs text-muted-foreground">— pieces handed over from cutting, waiting to be assigned</span>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Article</TableHead>
+                  <TableHead>Component</TableHead>
+                  <TableHead>From Cutter</TableHead>
+                  <TableHead>Source Job</TableHead>
+                  <TableHead className="text-right">Available</TableHead>
+                  <TableHead>Received By</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pending.map((p) => (
+                  <TableRow key={p.cuttingAssignmentId}>
+                    <TableCell>
+                      <div className="font-medium">{p.articleName}</div>
+                      <div className="text-xs text-muted-foreground">{p.articleCode}</div>
+                    </TableCell>
+                    <TableCell>{p.componentName}</TableCell>
+                    <TableCell>{p.cutterMasterName}</TableCell>
+                    <TableCell className="font-mono text-xs">CUT-{String(p.cuttingJobId).padStart(4, "0")}</TableCell>
+                    <TableCell className="text-right font-semibold">{p.available} pcs</TableCell>
+                    <TableCell className="text-sm">{p.receivedBy || "-"}</TableCell>
+                    <TableCell className="text-sm">{p.handoverDate ? format(new Date(p.handoverDate), "MMM d") : "-"}</TableCell>
+                    <TableCell className="text-right">
+                      <Button size="sm" variant="outline" onClick={() => {
+                        setForm({ ...form, articleId: p.articleId.toString() });
+                        setDialogOpen(true);
+                      }}>
+                        Start Job <ArrowRight className="ml-1 h-3 w-3" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="pt-6">

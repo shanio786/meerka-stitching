@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, sql } from "drizzle-orm";
-import { db, cuttingJobsTable, cuttingAssignmentsTable, cuttingSizeBreakdownTable, mastersTable, articlesTable, articleComponentsTable, masterAccountsTable, masterTransactionsTable } from "@workspace/db";
+import { db, cuttingJobsTable, cuttingAssignmentsTable, cuttingSizeBreakdownTable, mastersTable, articlesTable, articleComponentsTable, masterAccountsTable, masterTransactionsTable, stitchingAssignmentsTable, stitchingJobsTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -86,6 +86,7 @@ router.get("/cutting/jobs/:id", async (req, res): Promise<void> => {
       handoverStatus: cuttingAssignmentsTable.handoverStatus,
       receivedBy: cuttingAssignmentsTable.receivedBy,
       handoverDate: cuttingAssignmentsTable.handoverDate,
+      piecesConsumed: cuttingAssignmentsTable.piecesConsumed,
     })
     .from(cuttingAssignmentsTable)
     .leftJoin(mastersTable, eq(cuttingAssignmentsTable.masterId, mastersTable.id))
@@ -94,7 +95,14 @@ router.get("/cutting/jobs/:id", async (req, res): Promise<void> => {
   const assignmentsWithSizes = await Promise.all(assignments.map(async (a) => {
     const sizes = await db.select().from(cuttingSizeBreakdownTable)
       .where(eq(cuttingSizeBreakdownTable.assignmentId, a.id));
-    return { ...a, sizes };
+    const pickups = await db
+      .select({
+        stitchingJobId: stitchingAssignmentsTable.jobId,
+        pieces: stitchingAssignmentsTable.quantityGiven,
+      })
+      .from(stitchingAssignmentsTable)
+      .where(eq(stitchingAssignmentsTable.cuttingAssignmentId, a.id));
+    return { ...a, sizes, pickups };
   }));
 
   res.json({ ...job, assignments: assignmentsWithSizes });
