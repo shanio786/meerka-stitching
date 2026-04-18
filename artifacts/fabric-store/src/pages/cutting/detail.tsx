@@ -103,7 +103,7 @@ export default function CuttingDetail() {
   const [rows, setRows] = useState<ComponentRow[]>([]);
   const [sizes, setSizes] = useState<SizeRow[]>([{ size: "M", quantity: "" }]);
 
-  const [completeForm, setCompleteForm] = useState({ piecesCut: "", wasteMeters: "", fabricReturnedMeters: "" });
+  const [completeForm, setCompleteForm] = useState<{ piecesCut: string; wasteMeters: string; fabricReturnedMeters: string; sizeResults: { size: string; completedQty: string }[] }>({ piecesCut: "", wasteMeters: "", fabricReturnedMeters: "", sizeResults: [] });
   const [handoverForm, setHandoverForm] = useState<{ status: "with_cutter" | "returned_to_store" | "received_by_next"; receivedBy: string }>({ status: "received_by_next", receivedBy: "" });
 
   const fetchJob = async () => {
@@ -200,16 +200,36 @@ export default function CuttingDetail() {
     }
   };
 
+  const openComplete = (a: CuttingJob["assignments"][number]) => {
+    const initialSizes = (a.sizes || []).map((s) => ({ size: s.size, completedQty: String(s.quantity) }));
+    const totalFromSizes = initialSizes.reduce((sum, s) => sum + (parseInt(s.completedQty) || 0), 0);
+    setCompleteForm({
+      piecesCut: totalFromSizes > 0 ? String(totalFromSizes) : String(a.estimatedPieces ?? ""),
+      wasteMeters: "",
+      fabricReturnedMeters: "",
+      sizeResults: initialSizes,
+    });
+    setCompleteDialog(a.id);
+  };
+
   const handleComplete = async (assignmentId: number) => {
     try {
+      const validSizes = completeForm.sizeResults.filter((s) => parseInt(s.completedQty) > 0);
+      const sizeTotal = validSizes.reduce((sum, s) => sum + parseInt(s.completedQty), 0);
+      const piecesCut = parseInt(completeForm.piecesCut);
+      if (validSizes.length > 0 && sizeTotal !== piecesCut) {
+        toast({ title: `Size total (${sizeTotal}) ≠ Pieces Cut (${piecesCut})`, variant: "destructive" });
+        return;
+      }
       await apiPatch(`/cutting/assignments/${assignmentId}/complete`, {
-        piecesCut: parseInt(completeForm.piecesCut),
+        piecesCut,
         wasteMeters: completeForm.wasteMeters ? parseFloat(completeForm.wasteMeters) : 0,
         fabricReturnedMeters: completeForm.fabricReturnedMeters ? parseFloat(completeForm.fabricReturnedMeters) : 0,
+        sizeResults: validSizes.map((s) => ({ size: s.size, completedQty: parseInt(s.completedQty) })),
       });
       toast({ title: "Completed, master credited" });
       setCompleteDialog(null);
-      setCompleteForm({ piecesCut: "", wasteMeters: "", fabricReturnedMeters: "" });
+      setCompleteForm({ piecesCut: "", wasteMeters: "", fabricReturnedMeters: "", sizeResults: [] });
       fetchJob();
     } catch (e: unknown) {
       toast({ title: "Error", description: e instanceof Error ? e.message : "Failed", variant: "destructive" });
@@ -614,7 +634,18 @@ ${Object.keys(sizesAggregated).length > 0 ? `
                     <TableCell className="text-right font-mono text-xs">
                       {a.ratePerPiece ? `Rs.${a.ratePerPiece}/pc` : a.ratePerSuit ? <span className="text-purple-700">Rs.{a.ratePerSuit}/suit</span> : a.notes?.startsWith("Bundled with suit") ? <span className="text-muted-foreground italic">bundled</span> : "-"}
                     </TableCell>
-                    <TableCell className="text-right font-mono font-bold">{a.piecesCut || "-"}</TableCell>
+                    <TableCell className="text-right font-mono font-bold">
+                      <div>{a.piecesCut || "-"}</div>
+                      {a.sizes && a.sizes.length > 0 && (
+                        <div className="flex flex-wrap gap-1 justify-end mt-1">
+                          {a.sizes.map((s, idx) => (
+                            <Badge key={idx} variant="outline" className="text-[10px] font-mono px-1 py-0 h-4">
+                              {s.size}: {s.completedQty ?? s.quantity}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right font-mono font-bold text-green-600">{a.totalAmount ? `Rs.${a.totalAmount.toLocaleString()}` : "-"}</TableCell>
                     <TableCell><Badge variant={a.status === "completed" ? "default" : "secondary"}>{a.status.replace("_", " ")}</Badge></TableCell>
                     <TableCell>
@@ -628,16 +659,41 @@ ${Object.keys(sizesAggregated).length > 0 ? `
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
                         {a.status !== "completed" && (
-                          <Dialog open={completeDialog === a.id} onOpenChange={(o) => { setCompleteDialog(o ? a.id : null); if (!o) setCompleteForm({ piecesCut: "", wasteMeters: "", fabricReturnedMeters: "" }); }}>
-                            <DialogTrigger asChild><Button variant="ghost" size="icon" title="Complete"><CheckCircle className="h-4 w-4 text-green-600" /></Button></DialogTrigger>
-                            <DialogContent>
+                          <Dialog open={completeDialog === a.id} onOpenChange={(o) => { if (o) openComplete(a); else { setCompleteDialog(null); setCompleteForm({ piecesCut: "", wasteMeters: "", fabricReturnedMeters: "", sizeResults: [] }); } }}>
+                            <DialogTrigger asChild><Button variant="ghost" size="icon" title="Complete" onClick={() => openComplete(a)}><CheckCircle className="h-4 w-4 text-green-600" /></Button></DialogTrigger>
+                            <DialogContent className="max-w-lg">
                               <DialogHeader><DialogTitle>Complete — {a.masterName} / {a.componentName}</DialogTitle></DialogHeader>
-                              <div className="space-y-4">
+                              <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
                                 <div className="bg-muted/50 rounded-lg p-3 text-sm">
                                   <div>Fabric Given: <strong>{a.fabricGivenMeters}m</strong></div>
                                   {a.estimatedPieces && <div>Estimated: <strong>{a.estimatedPieces} pieces</strong></div>}
                                 </div>
-                                <div><Label>Pieces Actually Cut *</Label><Input type="number" value={completeForm.piecesCut} onChange={(e) => setCompleteForm({ ...completeForm, piecesCut: e.target.value })} /></div>
+
+                                {completeForm.sizeResults.length > 0 && (
+                                  <div className="space-y-2 border rounded-lg p-3">
+                                    <Label className="text-xs font-semibold">Pieces Cut per Size</Label>
+                                    {completeForm.sizeResults.map((sr, si) => (
+                                      <div key={si} className="flex items-center gap-2">
+                                        <div className="w-16 text-sm font-mono">{sr.size}</div>
+                                        <Input
+                                          type="number"
+                                          value={sr.completedQty}
+                                          onChange={(e) => {
+                                            const next = [...completeForm.sizeResults];
+                                            next[si] = { ...next[si], completedQty: e.target.value };
+                                            const total = next.reduce((s, x) => s + (parseInt(x.completedQty) || 0), 0);
+                                            setCompleteForm({ ...completeForm, sizeResults: next, piecesCut: String(total) });
+                                          }}
+                                          className="h-8"
+                                          placeholder="Pieces"
+                                        />
+                                      </div>
+                                    ))}
+                                    <div className="text-xs text-muted-foreground pt-1">Total auto-syncs to Pieces Cut below.</div>
+                                  </div>
+                                )}
+
+                                <div><Label>Pieces Actually Cut (Total) *</Label><Input type="number" value={completeForm.piecesCut} onChange={(e) => setCompleteForm({ ...completeForm, piecesCut: e.target.value })} /></div>
                                 <div><Label>Waste Fabric (m)</Label><Input type="number" step="0.1" value={completeForm.wasteMeters} onChange={(e) => setCompleteForm({ ...completeForm, wasteMeters: e.target.value })} /></div>
                                 <div><Label>Fabric Returned (m)</Label><Input type="number" step="0.1" value={completeForm.fabricReturnedMeters} onChange={(e) => setCompleteForm({ ...completeForm, fabricReturnedMeters: e.target.value })} /></div>
                                 <Button className="w-full" onClick={() => handleComplete(a.id)}>Mark Complete & Credit Master</Button>

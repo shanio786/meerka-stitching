@@ -51,6 +51,7 @@ interface StitchingJobDetail {
 
 interface MasterOption { id: number; name: string; machineNo: string | null; }
 
+interface PendingSize { size: string; cut: number; available: number; }
 interface PendingItem {
   cuttingAssignmentId: number;
   cuttingJobId: number;
@@ -60,6 +61,7 @@ interface PendingItem {
   available: number;
   receivedBy: string | null;
   handoverDate: string | null;
+  sizes: PendingSize[];
 }
 
 interface SizeQty { size: string; quantity: string; }
@@ -118,7 +120,9 @@ export default function StitchingDetail() {
       cutterMasterName: p.cutterMasterName,
       cuttingJobId: p.cuttingJobId,
       available: p.available,
-      sizes: [{ size: "", quantity: String(p.available) }],
+      sizes: p.sizes && p.sizes.length > 0
+        ? p.sizes.map((s) => ({ size: s.size, quantity: String(s.available) }))
+        : [{ size: "", quantity: String(p.available) }],
       ratePerPiece: "",
     })));
     setMasterId("");
@@ -340,6 +344,19 @@ export default function StitchingDetail() {
                                 <div className="flex-1">
                                   <div className="font-medium text-sm">{r.componentName}</div>
                                   <div className="text-xs text-muted-foreground">From {r.cutterMasterName} · CUT-{String(r.cuttingJobId).padStart(4, "0")} · Available: <span className="font-mono text-blue-600">{r.available} pcs</span></div>
+                                  {(() => {
+                                    const p = pending.find(x => x.cuttingAssignmentId === r.cuttingAssignmentId);
+                                    if (!p?.sizes || p.sizes.length === 0) return null;
+                                    return (
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                        {p.sizes.map((s, si) => (
+                                          <span key={si} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                                            {s.size}: {s.available}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                                 {r.selected && (
                                   <div className="text-sm font-mono">

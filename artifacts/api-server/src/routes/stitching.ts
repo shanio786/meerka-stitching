@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, sql } from "drizzle-orm";
-import { db, stitchingJobsTable, stitchingAssignmentsTable, mastersTable, articlesTable, masterAccountsTable, masterTransactionsTable, cuttingAssignmentsTable, cuttingJobsTable } from "@workspace/db";
+import { db, stitchingJobsTable, stitchingAssignmentsTable, mastersTable, articlesTable, masterAccountsTable, masterTransactionsTable, cuttingAssignmentsTable, cuttingJobsTable, cuttingSizeBreakdownTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -37,7 +37,37 @@ router.get("/stitching/pending-from-cutting", async (req, res): Promise<void> =>
     .where(and(...conditions))
     .orderBy(sql`${cuttingAssignmentsTable.handoverDate} DESC`);
 
-  res.json(rows.map((r) => ({ ...r, available: (r.piecesCut || 0) - (r.piecesConsumed || 0) })));
+  // Fetch size breakdown for each cutting assignment
+  const assignmentIds = rows.map((r) => r.cuttingAssignmentId);
+  const sizeRows = assignmentIds.length > 0
+    ? await db.select().from(cuttingSizeBreakdownTable).where(sql`${cuttingSizeBreakdownTable.assignmentId} = ANY(${assignmentIds})`)
+    : [];
+
+  // Per-size: how much already consumed by stitching
+  const consumedBySize = assignmentIds.length > 0
+    ? await db
+        .select({
+          cuttingAssignmentId: stitchingAssignmentsTable.cuttingAssignmentId,
+          size: stitchingAssignmentsTable.size,
+          consumed: sql<number>`COALESCE(SUM(${stitchingAssignmentsTable.quantityGiven}), 0)`.as("consumed"),
+        })
+        .from(stitchingAssignmentsTable)
+        .where(sql`${stitchingAssignmentsTable.cuttingAssignmentId} = ANY(${assignmentIds})`)
+        .groupBy(stitchingAssignmentsTable.cuttingAssignmentId, stitchingAssignmentsTable.size)
+    : [];
+
+  res.json(rows.map((r) => {
+    const sizes = sizeRows
+      .filter((s) => s.assignmentId === r.cuttingAssignmentId)
+      .map((s) => {
+        const cutQty = s.completedQty ?? s.quantity;
+        const usedRow = consumedBySize.find((c) => c.cuttingAssignmentId === r.cuttingAssignmentId && c.size === s.size);
+        const used = Number(usedRow?.consumed ?? 0);
+        return { size: s.size, cut: cutQty, available: Math.max(0, cutQty - used) };
+      })
+      .filter((s) => s.available > 0);
+    return { ...r, available: (r.piecesCut || 0) - (r.piecesConsumed || 0), sizes };
+  }));
 });
 
 router.get("/stitching/jobs", async (req, res): Promise<void> => {
