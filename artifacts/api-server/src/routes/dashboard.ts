@@ -230,4 +230,126 @@ router.get("/dashboard/production-reports", async (_req, res): Promise<void> => 
   });
 });
 
+router.get("/dashboard/trend", async (req, res): Promise<void> => {
+  const days = Math.min(Math.max(parseInt(req.query.days as string) || 30, 7), 90);
+
+  // Build a row per day for the last N days, summing pieces completed per stage
+  const rows = await db.execute(sql`
+    WITH days AS (
+      SELECT generate_series(
+        (CURRENT_DATE - (${days - 1}::int))::date,
+        CURRENT_DATE::date,
+        INTERVAL '1 day'
+      )::date AS day
+    ),
+    cutting AS (
+      SELECT completed_date::date AS day, COALESCE(SUM(pieces_cut), 0) AS pcs
+      FROM cutting_assignments
+      WHERE completed_date IS NOT NULL
+        AND completed_date::date >= CURRENT_DATE - (${days - 1}::int)
+      GROUP BY 1
+    ),
+    stitching AS (
+      SELECT completed_date::date AS day, COALESCE(SUM(pieces_completed), 0) AS pcs
+      FROM stitching_assignments
+      WHERE completed_date IS NOT NULL
+        AND completed_date::date >= CURRENT_DATE - (${days - 1}::int)
+      GROUP BY 1
+    ),
+    finishing AS (
+      SELECT date::date AS day, COALESCE(SUM(packed_qty), 0) AS pcs
+      FROM finishing_entries
+      WHERE date IS NOT NULL
+        AND date::date >= CURRENT_DATE - (${days - 1}::int)
+      GROUP BY 1
+    )
+    SELECT
+      to_char(d.day, 'YYYY-MM-DD') AS day,
+      COALESCE(c.pcs, 0)::int AS cutting,
+      COALESCE(s.pcs, 0)::int AS stitching,
+      COALESCE(f.pcs, 0)::int AS finishing
+    FROM days d
+    LEFT JOIN cutting c ON c.day = d.day
+    LEFT JOIN stitching s ON s.day = d.day
+    LEFT JOIN finishing f ON f.day = d.day
+    ORDER BY d.day ASC
+  `);
+
+  res.json(rows.rows);
+});
+
+router.get("/dashboard/workers", async (req, res): Promise<void> => {
+  const days = Math.min(Math.max(parseInt(req.query.days as string) || 30, 7), 90);
+
+  const masters = await db.execute(sql`
+    WITH cutting AS (
+      SELECT master_id, COALESCE(SUM(pieces_cut), 0) AS pcs
+      FROM cutting_assignments
+      WHERE completed_date IS NOT NULL
+        AND completed_date::date >= CURRENT_DATE - (${days - 1}::int)
+      GROUP BY master_id
+    ),
+    stitching AS (
+      SELECT master_id, COALESCE(SUM(pieces_completed), 0) AS pcs
+      FROM stitching_assignments
+      WHERE completed_date IS NOT NULL
+        AND completed_date::date >= CURRENT_DATE - (${days - 1}::int)
+      GROUP BY master_id
+    ),
+    overlock AS (
+      SELECT master_id, COALESCE(SUM(completed_qty), 0) AS pcs
+      FROM overlock_button_entries
+      WHERE date IS NOT NULL
+        AND date::date >= CURRENT_DATE - (${days - 1}::int)
+      GROUP BY master_id
+    ),
+    finishing AS (
+      SELECT master_id, COALESCE(SUM(packed_qty), 0) AS pcs
+      FROM finishing_entries
+      WHERE date IS NOT NULL
+        AND date::date >= CURRENT_DATE - (${days - 1}::int)
+      GROUP BY master_id
+    ),
+    qc_master AS (
+      SELECT master_id,
+        COALESCE(SUM(received_qty), 0) AS received,
+        COALESCE(SUM(rejected_qty), 0) AS rejected
+      FROM qc_entries
+      WHERE date IS NOT NULL
+        AND date::date >= CURRENT_DATE - (${days - 1}::int)
+        AND master_id IS NOT NULL
+      GROUP BY master_id
+    )
+    SELECT
+      m.id,
+      m.name,
+      m.master_type AS "masterType",
+      m.machine_no AS "machineNo",
+      COALESCE(c.pcs, 0)::int +
+      COALESCE(s.pcs, 0)::int +
+      COALESCE(o.pcs, 0)::int +
+      COALESCE(f.pcs, 0)::int AS "totalPieces",
+      COALESCE(c.pcs, 0)::int AS "cuttingPieces",
+      COALESCE(s.pcs, 0)::int AS "stitchingPieces",
+      COALESCE(o.pcs, 0)::int AS "overlockPieces",
+      COALESCE(f.pcs, 0)::int AS "finishingPieces",
+      COALESCE(qc.received, 0)::int AS "qcReceived",
+      COALESCE(qc.rejected, 0)::int AS "qcRejected",
+      CASE WHEN COALESCE(qc.received, 0) > 0
+           THEN ROUND((qc.rejected::numeric / qc.received::numeric) * 100, 1)
+           ELSE 0 END AS "defectRate"
+    FROM masters m
+    LEFT JOIN cutting c ON c.master_id = m.id
+    LEFT JOIN stitching s ON s.master_id = m.id
+    LEFT JOIN overlock o ON o.master_id = m.id
+    LEFT JOIN finishing f ON f.master_id = m.id
+    LEFT JOIN qc_master qc ON qc.master_id = m.id
+    WHERE COALESCE(c.pcs, 0) + COALESCE(s.pcs, 0) + COALESCE(o.pcs, 0) + COALESCE(f.pcs, 0) > 0
+    ORDER BY "totalPieces" DESC
+    LIMIT 10
+  `);
+
+  res.json(masters.rows);
+});
+
 export default router;

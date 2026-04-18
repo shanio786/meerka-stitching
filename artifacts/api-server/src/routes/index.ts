@@ -6,7 +6,7 @@ import articlesRouter from "./articles";
 import componentsRouter from "./components";
 import accessoriesRouter from "./accessories";
 import dashboardRouter from "./dashboard";
-import storageRouter from "./storage";
+import storageRouter, { publicStorageRouter } from "./storage";
 import mastersRouter from "./masters";
 import sizesRouter from "./sizes";
 import cuttingRouter from "./cutting";
@@ -25,6 +25,7 @@ const router: IRouter = Router();
 // Public
 router.use(healthRouter);
 router.use(authRouter);
+router.use(publicStorageRouter);
 
 // Authenticated routes
 router.use(requireAuth);

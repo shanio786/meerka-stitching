@@ -142,7 +142,7 @@ export default function Reports() {
           <p className="text-muted-foreground">Production, quality, performance and cost analysis</p>
         </div>
         <Button variant="outline" onClick={handlePrint} className="gap-2 no-print">
-          <Printer className="h-4 w-4" /> Print Report
+          <Printer className="h-4 w-4" /> Save as PDF / Print
         </Button>
       </div>
 

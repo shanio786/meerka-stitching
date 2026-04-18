@@ -7,6 +7,8 @@ import { Package, Layers, Scissors, Shirt, ClipboardCheck, CircleDot, Sparkles, 
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
+import { ProductionTrendChart } from "@/components/ProductionTrendChart";
+import { WorkerPerformanceWidget } from "@/components/WorkerPerformanceWidget";
 
 interface DashboardSummary {
   totalArticles: number;
@@ -188,6 +190,13 @@ export default function Dashboard() {
           )}
         </CardContent>
       </Card>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <ProductionTrendChart days={30} />
+        </div>
+        <WorkerPerformanceWidget days={30} />
+      </div>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
