@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, CheckCircle, Trash2, ArrowRightLeft, AlertTriangle } from "lucide-react";
+import { Plus, CheckCircle, Trash2, ArrowRightLeft, AlertTriangle, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { ImageUpload } from "@/components/ImageUpload";
@@ -245,6 +245,140 @@ export default function StitchingDetail() {
     try { await apiPatch(`/stitching/jobs/${id}`, { status }); fetchJob(); } catch {}
   };
 
+  const handlePrintJobCard = () => {
+    if (!job) return;
+    const totalGiven2 = job.assignments.reduce((s, a) => s + a.quantityGiven, 0);
+    const totalDone2 = job.assignments.reduce((s, a) => s + (a.piecesCompleted || 0), 0);
+    const totalWaste2 = job.assignments.reduce((s, a) => s + (a.piecesWaste || 0), 0);
+    const totalAmt2 = job.assignments.reduce((s, a) => s + (a.totalAmount || 0), 0);
+    const masterGroups: Record<string, Assignment[]> = {};
+    for (const a of job.assignments) {
+      if (!masterGroups[a.masterName]) masterGroups[a.masterName] = [];
+      masterGroups[a.masterName].push(a);
+    }
+    const sourceList = sourceCutJobs.length > 0
+      ? sourceCutJobs.map(j => `CUT-${String(j).padStart(4, "0")}`).join(", ")
+      : (job.cuttingJobId ? `CUT-${String(job.cuttingJobId).padStart(4, "0")}` : "—");
+    const html = `<!DOCTYPE html><html><head><title>Stitching Job Card STH-${String(job.id).padStart(4, "0")}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; margin: 0; padding: 24px; color: #111; font-size: 12px; }
+  .header { text-align: center; border-bottom: 3px double #000; padding-bottom: 12px; margin-bottom: 16px; }
+  .header h1 { margin: 0; font-size: 22px; letter-spacing: 1px; }
+  .header .sub { font-size: 11px; color: #555; margin-top: 4px; }
+  .meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; padding: 10px; background: #f5f5f5; border: 1px solid #ddd; }
+  .meta div { font-size: 12px; }
+  .meta strong { display: block; font-size: 10px; color: #666; text-transform: uppercase; margin-bottom: 2px; }
+  h2 { font-size: 14px; margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #999; }
+  h3 { font-size: 12px; margin: 12px 0 6px; padding: 4px 8px; background: #eef3f8; border-left: 3px solid #2563eb; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+  th, td { border: 1px solid #999; padding: 6px 8px; text-align: left; font-size: 11px; }
+  th { background: #eee; font-weight: bold; }
+  .right { text-align: right; }
+  .center { text-align: center; }
+  .totals-row { background: #f0f0f0; font-weight: bold; }
+  .grand { background: #e8f5e9; font-weight: bold; }
+  .signatures { margin-top: 32px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .sig-box { border-top: 1px solid #000; padding-top: 4px; text-align: center; font-size: 11px; }
+  .footer { margin-top: 24px; padding-top: 8px; border-top: 1px solid #ccc; text-align: center; font-size: 10px; color: #666; }
+  .badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 10px; background: #ddd; }
+  @media print { body { padding: 12px; } .no-print { display: none !important; } }
+</style></head><body>
+<div class="header">
+  <h1>STITCHING JOB CARD</h1>
+  <div class="sub">STH-${String(job.id).padStart(4, "0")} &nbsp;|&nbsp; ${job.articleName} (${job.articleCode})</div>
+</div>
+
+<div class="meta">
+  <div><strong>Article</strong>${job.articleName}</div>
+  <div><strong>Article Code</strong>${job.articleCode}</div>
+  <div><strong>Job Date</strong>${format(new Date(job.jobDate), "dd MMM yyyy")}</div>
+  <div><strong>Supervisor</strong>${job.supervisorName}</div>
+  <div><strong>From Cutting</strong>${sourceList}</div>
+  <div><strong>Status</strong><span class="badge">${job.status.toUpperCase()}</span></div>
+</div>
+
+<h2>Master Assignments</h2>
+${Object.entries(masterGroups).map(([masterName, items]) => {
+  const mGiven = items.reduce((s, a) => s + a.quantityGiven, 0);
+  const mDone = items.reduce((s, a) => s + (a.piecesCompleted || 0), 0);
+  const mWaste = items.reduce((s, a) => s + (a.piecesWaste || 0), 0);
+  const mAmt = items.reduce((s, a) => s + (a.totalAmount || 0), 0);
+  const machineNo = items[0]?.machineNo;
+  return `
+    <h3>${masterName}${machineNo ? ` (Machine: ${machineNo})` : ""} &nbsp;—&nbsp; ${items.length} component${items.length > 1 ? "s" : ""}</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Component</th>
+          <th class="center">Size</th>
+          <th class="right">Given</th>
+          <th class="right">Rate</th>
+          <th class="right">Done</th>
+          <th class="right">Waste</th>
+          <th class="right">Amount</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items.map((a) => `
+          <tr>
+            <td>${a.componentName}</td>
+            <td class="center">${a.size || "—"}</td>
+            <td class="right">${a.quantityGiven}</td>
+            <td class="right">${a.ratePerPiece ? `Rs.${a.ratePerPiece}` : (a.ratePerSuit ? `Rs.${a.ratePerSuit}/suit` : "—")}</td>
+            <td class="right">${a.piecesCompleted ?? "—"}</td>
+            <td class="right">${a.piecesWaste || 0}</td>
+            <td class="right">${a.totalAmount ? `Rs.${a.totalAmount.toLocaleString()}` : "—"}</td>
+            <td>${a.status}</td>
+          </tr>
+        `).join("")}
+        <tr class="totals-row">
+          <td colspan="2"><strong>Subtotal</strong></td>
+          <td class="right">${mGiven}</td>
+          <td></td>
+          <td class="right">${mDone}</td>
+          <td class="right">${mWaste}</td>
+          <td class="right">Rs.${mAmt.toLocaleString()}</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+  `;
+}).join("")}
+
+<table>
+  <tbody>
+    <tr class="grand">
+      <td><strong>GRAND TOTAL</strong></td>
+      <td class="right">Given: <strong>${totalGiven2}</strong></td>
+      <td class="right">Done: <strong>${totalDone2}</strong></td>
+      <td class="right">Waste: <strong>${totalWaste2}</strong></td>
+      <td class="right">Amount: <strong>Rs.${totalAmt2.toLocaleString()}</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+${job.notes ? `<h2>Notes</h2><div style="padding:8px;border:1px solid #ddd;background:#fafafa;font-size:11px">${job.notes}</div>` : ""}
+
+<div class="signatures">
+  <div class="sig-box">Stitching Master Signature</div>
+  <div class="sig-box">Supervisor Signature</div>
+  <div class="sig-box">Authorized By</div>
+</div>
+
+<div class="footer">
+  Powered by Devoria Tech &nbsp;|&nbsp; +923117597815 &nbsp;|&nbsp; Printed on ${format(new Date(), "dd MMM yyyy, HH:mm")}
+</div>
+
+<div class="no-print" style="text-align:center;margin-top:20px"><button onclick="window.print()" style="padding:8px 16px;font-size:13px;cursor:pointer">Print</button></div>
+<script>setTimeout(() => window.print(), 300);</script>
+</body></html>`;
+    const w = window.open("", "_blank", "width=900,height=700");
+    if (w) { w.document.write(html); w.document.close(); }
+    else { toast({ title: "Pop-up blocked", description: "Please allow pop-ups to print", variant: "destructive" }); }
+  };
+
   if (loading) return <div className="space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-64 w-full" /></div>;
   if (!job) return <div className="text-center py-12 text-muted-foreground">Job not found</div>;
 
@@ -278,6 +412,9 @@ export default function StitchingDetail() {
         description={`${job.articleName} (${job.articleCode}) | Supervisor: ${job.supervisorName}${sourceCutJobs.length > 0 ? ` | From cutting: ${sourceCutJobs.map(j => `CUT-${String(j).padStart(4, "0")}`).join(", ")}` : (job.cuttingJobId ? ` | From cutting: CUT-${String(job.cuttingJobId).padStart(4, "0")}` : "")}`}
         actions={
           <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handlePrintJobCard}>
+              <Printer className="h-4 w-4 mr-2" /> Print Job Card
+            </Button>
             {job.cuttingJobId && (
               <Link href={`/cutting/${job.cuttingJobId}`}>
                 <Button variant="outline" size="sm">View Cutting</Button>
