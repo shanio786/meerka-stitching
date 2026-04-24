@@ -265,6 +265,36 @@ export default function CuttingDetail() {
     }
   };
 
+  const [bulkCompleteSubmitting, setBulkCompleteSubmitting] = useState<string | null>(null);
+  const handleQuickCompleteAll = async (masterName: string, items: typeof job.assignments) => {
+    const pending = items.filter((a) => a.status !== "completed");
+    if (pending.length === 0) { toast({ title: "Nothing to complete" }); return; }
+    if (!confirm(`Mark ${pending.length} component(s) for ${masterName} as complete?\n\nWill use estimated/size pieces, no waste, no fabric returned.\nAdjust individually later if needed.`)) return;
+    setBulkCompleteSubmitting(masterName);
+    let ok = 0, fail = 0;
+    for (const a of pending) {
+      try {
+        const sizeResults = (a.sizes && a.sizes.length > 0)
+          ? a.sizes.map((s) => ({ size: s.size, completedQty: s.quantity }))
+          : [];
+        const piecesCut = sizeResults.length > 0
+          ? sizeResults.reduce((s, x) => s + x.completedQty, 0)
+          : (a.estimatedPieces || 0);
+        if (piecesCut <= 0) { fail++; continue; }
+        await apiPatch(`/cutting/assignments/${a.id}/complete`, {
+          piecesCut,
+          wasteMeters: 0,
+          fabricReturnedMeters: 0,
+          sizeResults,
+        });
+        ok++;
+      } catch { fail++; }
+    }
+    setBulkCompleteSubmitting(null);
+    toast({ title: `${ok} completed${fail > 0 ? `, ${fail} skipped` : ""}` });
+    fetchJob();
+  };
+
   const openBulkHandover = () => {
     if (!job) return;
     const sel: Record<number, boolean> = {};
@@ -701,6 +731,19 @@ ${hasMultipleComponents ? `<div style="font-size:10px;color:#666;margin-top:4px"
                           <Badge variant={allDone ? "default" : "secondary"} className="text-xs">
                             {g.items.length} component{g.items.length > 1 ? "s" : ""} · {allDone ? "all done" : `${g.items.filter(x => x.status === "completed").length}/${g.items.length} done`}
                           </Badge>
+                          {!allDone && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs gap-1 ml-2"
+                              disabled={bulkCompleteSubmitting === g.masterName}
+                              onClick={() => handleQuickCompleteAll(g.masterName, g.items)}
+                              title="Mark all pending components for this master as complete (uses estimated/size pieces, no waste)"
+                            >
+                              <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+                              {bulkCompleteSubmitting === g.masterName ? "Completing..." : `Quick Complete (${g.items.filter(x => x.status !== "completed").length})`}
+                            </Button>
+                          )}
                         </div>
                         <div className="flex items-center gap-4 text-xs font-mono">
                           <span>Fabric: <strong>{mFabric.toFixed(1)}m</strong></span>
