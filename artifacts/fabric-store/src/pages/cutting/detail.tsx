@@ -637,27 +637,57 @@ ${Object.keys(sizesAggregated).length > 0 ? `
           {!job.assignments?.length ? (
             <div className="text-center py-8 text-muted-foreground">No assignments yet — click "Assign Master" to start</div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Master</TableHead>
-                  <TableHead>Component</TableHead>
-                  <TableHead className="text-right">Fabric</TableHead>
-                  <TableHead className="text-right">Per Pc</TableHead>
-                  <TableHead className="text-right">Est.</TableHead>
-                  <TableHead className="text-right">Rate</TableHead>
-                  <TableHead className="text-right">Cut</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Handover</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {job.assignments.map((a) => (
-                  <TableRow key={a.id}>
-                    <TableCell className="font-medium">{a.masterName}</TableCell>
-                    <TableCell><div>{a.componentName}</div>{a.fabricType && <div className="text-xs text-muted-foreground">{a.fabricType}</div>}</TableCell>
+            <div className="space-y-6">
+              {(() => {
+                type Asn = typeof job.assignments[number];
+                const groups = new Map<string, { masterName: string; items: Asn[] }>();
+                for (const a of job.assignments) {
+                  const key = `${a.masterName}__${a.id < 0 ? a.id : ""}`;
+                  const existing = Array.from(groups.entries()).find(([, g]) => g.masterName === a.masterName);
+                  if (existing) existing[1].items.push(a);
+                  else groups.set(key, { masterName: a.masterName, items: [a] });
+                }
+                return Array.from(groups.values()).map((g) => {
+                  const mFabric = g.items.reduce((s, x) => s + (x.fabricGivenMeters || 0), 0);
+                  const mEst = g.items.reduce((s, x) => s + (x.estimatedPieces || 0), 0);
+                  const mCut = g.items.reduce((s, x) => s + (x.piecesCut || 0), 0);
+                  const mAmount = g.items.reduce((s, x) => s + (x.totalAmount || 0), 0);
+                  const allDone = g.items.every((x) => x.status === "completed");
+                  return (
+                    <div key={g.masterName} className="border rounded-lg overflow-hidden">
+                      <div className="bg-muted/40 px-4 py-2.5 flex items-center justify-between border-b">
+                        <div className="flex items-center gap-3">
+                          <div className="font-semibold text-base">{g.masterName}</div>
+                          <Badge variant={allDone ? "default" : "secondary"} className="text-xs">
+                            {g.items.length} component{g.items.length > 1 ? "s" : ""} · {allDone ? "all done" : `${g.items.filter(x => x.status === "completed").length}/${g.items.length} done`}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-4 text-xs font-mono">
+                          <span>Fabric: <strong>{mFabric.toFixed(1)}m</strong></span>
+                          {mEst > 0 && <span className="text-blue-600">Est: <strong>{mEst}</strong></span>}
+                          <span className="text-green-700">Cut: <strong>{mCut}</strong></span>
+                          <span className="text-green-700">Rs.<strong>{mAmount.toLocaleString()}</strong></span>
+                        </div>
+                      </div>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Component</TableHead>
+                            <TableHead className="text-right">Fabric</TableHead>
+                            <TableHead className="text-right">Per Pc</TableHead>
+                            <TableHead className="text-right">Est.</TableHead>
+                            <TableHead className="text-right">Rate</TableHead>
+                            <TableHead className="text-right">Cut</TableHead>
+                            <TableHead className="text-right">Amount</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Handover</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {g.items.map((a) => (
+                            <TableRow key={a.id}>
+                    <TableCell><div className="font-medium">{a.componentName}</div>{a.fabricType && <div className="text-xs text-muted-foreground">{a.fabricType}</div>}</TableCell>
                     <TableCell className="text-right font-mono">{a.fabricGivenMeters}m</TableCell>
                     <TableCell className="text-right font-mono">{a.fabricPerPiece ? `${a.fabricPerPiece}m` : "-"}</TableCell>
                     <TableCell className="text-right">{a.estimatedPieces ? <span className="font-mono font-bold text-blue-600">{a.estimatedPieces}</span> : "-"}</TableCell>
@@ -760,9 +790,28 @@ ${Object.keys(sizesAggregated).length > 0 ? `
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  );
+                });
+              })()}
+              {(() => {
+                const tFabric = job.assignments.reduce((s, x) => s + (x.fabricGivenMeters || 0), 0);
+                const tEst = job.assignments.reduce((s, x) => s + (x.estimatedPieces || 0), 0);
+                const tCut = job.assignments.reduce((s, x) => s + (x.piecesCut || 0), 0);
+                const tAmount = job.assignments.reduce((s, x) => s + (x.totalAmount || 0), 0);
+                return (
+                  <div className="flex items-center justify-end gap-6 pt-3 border-t text-sm font-mono">
+                    <span>Total Fabric: <strong>{tFabric.toFixed(1)}m</strong></span>
+                    {tEst > 0 && <span className="text-blue-600">Est: <strong>{tEst}</strong></span>}
+                    <span className="text-green-700">Cut: <strong>{tCut}</strong></span>
+                    <span className="text-green-700">Amount: <strong>Rs.{tAmount.toLocaleString()}</strong></span>
+                  </div>
+                );
+              })()}
+            </div>
           )}
         </CardContent>
       </Card>
