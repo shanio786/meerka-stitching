@@ -5,18 +5,30 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Trash2, CheckCircle, XCircle, Search, Printer } from "lucide-react";
+import { Plus, Trash2, CheckCircle, XCircle, Search, Printer, Recycle, Ban, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiGet, apiPost, apiDelete } from "@/lib/api";
+import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { format } from "date-fns";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { PendingPoolCard, type PendingRow } from "@/components/PendingPoolCard";
 import { printJobCard } from "@/components/JobCard";
 import { SizeBreakdownRows, emptyBreakdownRow, validBreakdownRows, type BreakdownRow } from "@/components/SizeBreakdownRows";
+
+interface ReworkRow {
+  id: number;
+  qcEntryId: number;
+  qty: number;
+  targetStage: string;
+  targetMasterId: number | null;
+  targetMasterName: string | null;
+  status: string;
+  date: string;
+  notes: string | null;
+}
 
 interface QCEntry {
   id: number;
@@ -35,6 +47,9 @@ interface QCEntry {
   rejectionReason: string | null;
   notes: string | null;
   date: string;
+  reworks: ReworkRow[];
+  reworkedQty: number;
+  remainingRejected: number;
 }
 
 interface ArticleOption { id: number; articleCode: string; articleName: string; }
@@ -54,6 +69,9 @@ export default function QCEntries() {
 
   const [form, setForm] = useState(emptyForm);
   const [breakdown, setBreakdown] = useState<BreakdownRow[]>([emptyBreakdownRow()]);
+
+  const [reworkDialog, setReworkDialog] = useState<QCEntry | null>(null);
+  const [reworkForm, setReworkForm] = useState({ targetStage: "stitching", targetMasterId: "", qty: "", notes: "" });
 
   const fetchEntries = async () => {
     setLoading(true);
@@ -131,6 +149,58 @@ export default function QCEntries() {
     }
   };
 
+  const openRework = (e: QCEntry) => {
+    setReworkForm({ targetStage: "stitching", targetMasterId: "", qty: String(e.remainingRejected || 0), notes: "" });
+    setReworkDialog(e);
+  };
+
+  const handleRework = async () => {
+    if (!reworkDialog) return;
+    const qty = parseInt(reworkForm.qty);
+    if (!qty || qty <= 0) { toast({ title: "Enter quantity", variant: "destructive" }); return; }
+    if (qty > reworkDialog.remainingRejected) {
+      toast({ title: `Only ${reworkDialog.remainingRejected} rejected piece(s) remain`, variant: "destructive" });
+      return;
+    }
+    try {
+      await apiPost(`/qc/${reworkDialog.id}/rework`, {
+        targetStage: reworkForm.targetStage,
+        targetMasterId: reworkForm.targetStage === "discarded" || !reworkForm.targetMasterId ? null : parseInt(reworkForm.targetMasterId),
+        qty,
+        notes: reworkForm.notes || undefined,
+        date: new Date().toISOString(),
+      });
+      toast({ title: reworkForm.targetStage === "discarded" ? `${qty} piece(s) discarded` : `${qty} piece(s) sent to ${reworkForm.targetStage}` });
+      setReworkDialog(null);
+      fetchEntries();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to record rework";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
+  };
+
+  const completeRework = async (rework: ReworkRow) => {
+    try {
+      await apiPatch(`/qc/reworks/${rework.id}/complete`, {});
+      toast({ title: "Marked complete" });
+      fetchEntries();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
+  };
+
+  const deleteRework = async (rework: ReworkRow) => {
+    if (!confirm("Remove this rework decision?")) return;
+    try {
+      await apiDelete(`/qc/reworks/${rework.id}`);
+      fetchEntries();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
+  };
+
   const handlePrintJobCard = (e: QCEntry) => {
     void printJobCard({
       title: "Quality Control Card",
@@ -176,7 +246,7 @@ export default function QCEntries() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Quality Control" description="Overlock/Button ke baad pieces inspect karo — passed/rejected ka record rakhein" actions={
+      <PageHeader title="Quality Control" description="Inspect pieces after Overlock/Button — record passed and rejected, then send rejects for rework or discard." actions={
         <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setForm(emptyForm); setBreakdown([emptyBreakdownRow()]); } }}>
           <DialogTrigger asChild><Button data-testid="button-new-qc"><Plus className="mr-2 h-4 w-4" /> New QC Entry</Button></DialogTrigger>
           <DialogContent className="max-w-3xl">
@@ -266,11 +336,66 @@ export default function QCEntries() {
                       <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate" title={e.receivedFrom || ""}>{e.receivedFrom || "-"}</TableCell>
                       <TableCell className="text-center font-mono">{e.receivedQty}</TableCell>
                       <TableCell className="text-center font-mono text-green-600">{e.passedQty}</TableCell>
-                      <TableCell className="text-center font-mono text-destructive">{e.rejectedQty}</TableCell>
+                      <TableCell className="text-center font-mono text-destructive">
+                        <div>{e.rejectedQty}</div>
+                        {e.reworkedQty > 0 && (
+                          <div className="text-[10px] font-normal text-muted-foreground" title="Already routed for rework or discard">
+                            {e.reworkedQty} routed
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell><Badge variant={parseFloat(passRate(e)) >= 90 ? "default" : "destructive"}>{passRate(e)}%</Badge></TableCell>
-                      <TableCell className="max-w-[120px] truncate" title={e.rejectionReason || ""}>{e.rejectionReason || "-"}</TableCell>
+                      <TableCell className="max-w-[160px]">
+                        <div className="truncate" title={e.rejectionReason || ""}>{e.rejectionReason || "-"}</div>
+                        {e.reworks && e.reworks.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {e.reworks.map((r) => (
+                              <Badge
+                                key={r.id}
+                                variant={r.targetStage === "discarded" ? "destructive" : r.status === "completed" ? "default" : "secondary"}
+                                className="text-[10px] gap-1"
+                                title={r.notes || ""}
+                              >
+                                {r.targetStage === "discarded" ? <Ban className="h-3 w-3" /> : <Recycle className="h-3 w-3" />}
+                                {r.qty} → {r.targetStage}{r.targetMasterName ? ` (${r.targetMasterName})` : ""}
+                                {r.targetStage !== "discarded" && r.status === "pending" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => completeRework(r)}
+                                    className="ml-1 hover:text-foreground"
+                                    title="Mark complete"
+                                    data-testid={`button-complete-rework-${r.id}`}
+                                  >
+                                    <CheckCircle className="h-3 w-3" />
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => deleteRework(r)}
+                                  className="ml-0.5 hover:text-foreground"
+                                  title="Remove"
+                                  data-testid={`button-remove-rework-${r.id}`}
+                                >
+                                  <XCircle className="h-3 w-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {e.remainingRejected > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openRework(e)}
+                              title={`Rework ${e.remainingRejected} rejected piece(s)`}
+                              data-testid={`button-rework-${e.id}`}
+                            >
+                              <RotateCcw className="h-4 w-4 text-orange-600" />
+                            </Button>
+                          )}
                           <Button variant="ghost" size="icon" onClick={() => handlePrintJobCard(e)} title="Print Job Card" data-testid={`button-jobcard-${e.id}`}>
                             <Printer className="h-4 w-4" />
                           </Button>
@@ -285,6 +410,83 @@ export default function QCEntries() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!reworkDialog} onOpenChange={(o) => { if (!o) setReworkDialog(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Rejected Pieces for Rework</DialogTitle>
+            <DialogDescription>Route rejected pieces back to a production stage or discard them as scrap.</DialogDescription>
+          </DialogHeader>
+          {reworkDialog && (
+            <div className="space-y-4">
+              <div className="rounded-md bg-muted p-3 text-sm">
+                <div><span className="text-muted-foreground">Article:</span> <span className="font-medium">{reworkDialog.articleName}</span> ({reworkDialog.articleCode})</div>
+                {reworkDialog.componentName && <div><span className="text-muted-foreground">Component:</span> {reworkDialog.componentName}{reworkDialog.size ? ` · ${reworkDialog.size}` : ""}</div>}
+                <div className="mt-1">
+                  <span className="text-muted-foreground">Rejected:</span> <span className="font-mono text-destructive">{reworkDialog.rejectedQty}</span>
+                  <span className="text-muted-foreground"> · Already routed:</span> <span className="font-mono">{reworkDialog.reworkedQty}</span>
+                  <span className="text-muted-foreground"> · Remaining:</span> <span className="font-mono font-semibold">{reworkDialog.remainingRejected}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Send To *</Label>
+                  <Select value={reworkForm.targetStage} onValueChange={(v) => setReworkForm({ ...reworkForm, targetStage: v, targetMasterId: "" })}>
+                    <SelectTrigger data-testid="select-rework-stage"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="stitching">Back to Stitching</SelectItem>
+                      <SelectItem value="overlock">Back to Overlock</SelectItem>
+                      <SelectItem value="button">Back to Button</SelectItem>
+                      <SelectItem value="discarded">Discard (scrap)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Quantity *</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={reworkDialog.remainingRejected}
+                    value={reworkForm.qty}
+                    onChange={(e) => setReworkForm({ ...reworkForm, qty: e.target.value })}
+                    data-testid="input-rework-qty"
+                  />
+                </div>
+              </div>
+
+              {reworkForm.targetStage !== "discarded" && (
+                <div>
+                  <Label>Assign to Master (optional)</Label>
+                  <SearchableSelect
+                    value={reworkForm.targetMasterId}
+                    onChange={(v) => setReworkForm({ ...reworkForm, targetMasterId: v })}
+                    options={masters.filter(m => m.masterType === reworkForm.targetStage).map(m => ({ value: m.id.toString(), label: m.name }))}
+                    placeholder="Select master (or leave blank)"
+                  />
+                </div>
+              )}
+
+              <div>
+                <Label>Notes</Label>
+                <Input
+                  value={reworkForm.notes}
+                  onChange={(e) => setReworkForm({ ...reworkForm, notes: e.target.value })}
+                  placeholder="Reason / instruction (optional)"
+                  data-testid="input-rework-notes"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setReworkDialog(null)}>Cancel</Button>
+                <Button onClick={handleRework} data-testid="button-submit-rework">
+                  {reworkForm.targetStage === "discarded" ? <><Ban className="mr-2 h-4 w-4" /> Discard</> : <><Recycle className="mr-2 h-4 w-4" /> Send for Rework</>}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

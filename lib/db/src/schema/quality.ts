@@ -20,3 +20,16 @@ export const qcEntriesTable = pgTable("qc_entries", {
   date: timestamp("date", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const qcReworksTable = pgTable("qc_reworks", {
+  id: serial("id").primaryKey(),
+  qcEntryId: integer("qc_entry_id").notNull().references(() => qcEntriesTable.id, { onDelete: "cascade" }),
+  targetStage: text("target_stage").notNull(),
+  targetMasterId: integer("target_master_id").references(() => mastersTable.id),
+  qty: integer("qty").notNull(),
+  status: text("status").notNull().default("pending"),
+  notes: text("notes"),
+  date: timestamp("date", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

@@ -61,21 +61,25 @@ router.get("/accounts/:masterId/ledger", async (req, res): Promise<void> => {
 
 router.post("/accounts/:masterId/payment", async (req, res): Promise<void> => {
   const masterId = parseInt(req.params.masterId, 10);
-  const { amount, paymentMethod, notes, date } = req.body;
+  const { amount, paymentMethod, notes, date, referenceNo } = req.body;
 
   if (!amount || amount <= 0) {
     res.status(400).json({ error: "Valid amount is required" });
     return;
   }
 
+  const combinedNotes = [referenceNo ? `Ref: ${referenceNo}` : null, notes || null]
+    .filter(Boolean)
+    .join(" - ") || null;
+
   const result = await db.transaction(async (tx) => {
     const [payment] = await tx.insert(masterPaymentsTable).values({
-      masterId, amount, paymentMethod: paymentMethod || "cash", notes, date: new Date(date || Date.now()),
+      masterId, amount, paymentMethod: paymentMethod || "cash", notes: combinedNotes, date: new Date(date || Date.now()),
     }).returning();
 
     await tx.insert(masterTransactionsTable).values({
       masterId, type: "payment", amount: -amount,
-      description: `Payment - ${paymentMethod || "cash"} - ${notes || ""}`.trim(),
+      description: `Payment - ${paymentMethod || "cash"}${referenceNo ? ` - Ref: ${referenceNo}` : ""}${notes ? ` - ${notes}` : ""}`.trim(),
     });
 
     await tx.update(masterAccountsTable).set({
