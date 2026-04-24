@@ -493,9 +493,41 @@ export default function StitchingDetail() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {g.items.map((a) => (
-                            <TableRow key={a.id}>
-                              <TableCell>{a.componentName}</TableCell>
+                          {(() => {
+                            const sizeOrder = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
+                            const sortedItems = [...g.items].sort((a, b) => {
+                              if (a.componentName !== b.componentName) return a.componentName.localeCompare(b.componentName);
+                              const ai = sizeOrder.indexOf(a.size || ""); const bi = sizeOrder.indexOf(b.size || "");
+                              if (ai === -1 && bi === -1) return (a.size || "").localeCompare(b.size || "");
+                              if (ai === -1) return 1; if (bi === -1) return -1;
+                              return ai - bi;
+                            });
+                            const compGroups: Record<string, { items: typeof g.items; given: number; done: number; waste: number; amount: number }> = {};
+                            for (const it of sortedItems) {
+                              if (!compGroups[it.componentName]) compGroups[it.componentName] = { items: [], given: 0, done: 0, waste: 0, amount: 0 };
+                              compGroups[it.componentName].items.push(it);
+                              compGroups[it.componentName].given += it.quantityGiven;
+                              compGroups[it.componentName].done += it.piecesCompleted || 0;
+                              compGroups[it.componentName].waste += it.piecesWaste || 0;
+                              compGroups[it.componentName].amount += it.totalAmount || 0;
+                            }
+                            return sortedItems.map((a, idx) => {
+                              const isFirstOfComp = idx === 0 || sortedItems[idx - 1].componentName !== a.componentName;
+                              const compInfo = compGroups[a.componentName];
+                              const compRowCount = compInfo.items.length;
+                              const isLastOfComp = idx === sortedItems.length - 1 || sortedItems[idx + 1].componentName !== a.componentName;
+                              return (
+                                <TableRow key={a.id} className={isLastOfComp && idx < sortedItems.length - 1 ? "border-b-2 border-b-muted-foreground/20" : ""}>
+                                  {isFirstOfComp ? (
+                                    <TableCell rowSpan={compRowCount} className="align-top bg-muted/20 border-r font-medium">
+                                      <div>{a.componentName}</div>
+                                      {compRowCount > 1 && (
+                                        <div className="text-xs text-muted-foreground font-normal mt-1 font-mono">
+                                          Σ {compInfo.given}g · {compInfo.done}d · Rs.{compInfo.amount.toLocaleString()}
+                                        </div>
+                                      )}
+                                    </TableCell>
+                                  ) : null}
                               <TableCell><Badge variant="outline" className="font-mono text-xs">{a.size || "All"}</Badge></TableCell>
                               <TableCell className="text-right font-mono">{a.quantityGiven}</TableCell>
                               <TableCell className="text-right font-mono">{a.piecesCompleted || "-"}</TableCell>
@@ -542,7 +574,9 @@ export default function StitchingDetail() {
                                 </div>
                               </TableCell>
                             </TableRow>
-                          ))}
+                              );
+                            });
+                          })()}
                         </TableBody>
                       </Table>
                     </div>
