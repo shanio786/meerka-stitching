@@ -177,6 +177,21 @@ export default function CuttingDetail() {
     }
     if (rateMode === "per_suit" && !ratePerSuit) { toast({ title: "Enter rate per suit", variant: "destructive" }); return; }
 
+    const sizeTotal = sizes.reduce((s, x) => s + (parseInt(x.quantity) || 0), 0);
+    if (sizeTotal > 0) {
+      const estimates = selectedRows.map((r) => calcEstimated(r)).filter((x): x is number => x !== null);
+      if (estimates.length > 0) {
+        const minEst = Math.min(...estimates);
+        if (sizeTotal > minEst) {
+          toast({ title: `Size total ${sizeTotal} exceeds estimated ${minEst} pieces`, description: "Reduce size quantities or adjust fabric per piece.", variant: "destructive" });
+          return;
+        }
+      }
+      const sizeKeys = sizes.filter((s) => parseInt(s.quantity) > 0).map((s) => s.size);
+      const dupes = sizeKeys.filter((s, i) => sizeKeys.indexOf(s) !== i);
+      if (dupes.length > 0) { toast({ title: `Duplicate size: ${dupes[0]}`, variant: "destructive" }); return; }
+    }
+
     try {
       const items = selectedRows.map((r) => ({
         componentName: r.componentName,
@@ -579,7 +594,22 @@ ${Object.keys(sizesAggregated).length > 0 ? `
                   </div>
 
                   <div>
-                    <Label>Size Breakdown (applied to each component)</Label>
+                    {(() => {
+                      const sizeTotal = sizes.reduce((s, x) => s + (parseInt(x.quantity) || 0), 0);
+                      const ests = rows.filter((r) => r.selected).map(calcEstimated).filter((x): x is number => x !== null);
+                      const minEst = ests.length > 0 ? Math.min(...ests) : null;
+                      const over = minEst !== null && sizeTotal > minEst;
+                      return (
+                        <div className="flex items-center justify-between mb-1">
+                          <Label>Size Breakdown (applied to each component)</Label>
+                          {minEst !== null && (
+                            <div className={`text-xs font-mono ${over ? "text-destructive font-bold" : "text-muted-foreground"}`}>
+                              Total: {sizeTotal} / {minEst} estimated{over ? " — exceeds!" : ""}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                     {sizes.map((s, i) => (
                       <div key={i} className="flex gap-2 mt-2 items-center">
                         <Select value={s.size} onValueChange={(v) => { const ns = [...sizes]; ns[i].size = v; setSizes(ns); }}>

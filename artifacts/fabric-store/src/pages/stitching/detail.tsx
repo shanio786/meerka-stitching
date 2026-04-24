@@ -447,85 +447,115 @@ export default function StitchingDetail() {
           {!job.assignments?.length ? (
             <div className="text-center py-8 text-muted-foreground">No assignments yet</div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Master</TableHead>
-                  <TableHead>Machine</TableHead>
-                  <TableHead>Component</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead>Given</TableHead>
-                  <TableHead>Done</TableHead>
-                  <TableHead>Waste</TableHead>
-                  <TableHead>Rate</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {job.assignments.map((a) => (
-                  <TableRow key={a.id}>
-                    <TableCell className="font-medium">{a.masterName}</TableCell>
-                    <TableCell>{a.machineNo || "-"}</TableCell>
-                    <TableCell>{a.componentName}</TableCell>
-                    <TableCell>{a.size || "All"}</TableCell>
-                    <TableCell>{a.quantityGiven}</TableCell>
-                    <TableCell>{a.piecesCompleted || "-"}</TableCell>
-                    <TableCell>{a.piecesWaste || "-"}</TableCell>
-                    <TableCell>{a.ratePerPiece ? `Rs.${a.ratePerPiece}/pc` : a.ratePerSuit ? `Rs.${a.ratePerSuit}/suit` : <span className="text-xs text-muted-foreground">bundled</span>}</TableCell>
-                    <TableCell className="font-mono">{a.totalAmount ? `Rs.${a.totalAmount.toLocaleString()}` : "-"}</TableCell>
-                    <TableCell><Badge variant={a.status === "completed" ? "default" : "secondary"}>{a.status.replace("_", " ")}</Badge></TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {a.status !== "completed" && (
-                          <>
-                            <Dialog open={completeDialog === a.id} onOpenChange={o => { setCompleteDialog(o ? a.id : null); if (!o) setCompleteForm({ piecesCompleted: "", piecesWaste: "", wasteReason: "" }); }}>
-                              <DialogTrigger asChild><Button variant="ghost" size="icon" title="Complete"><CheckCircle className="h-4 w-4 text-green-600" /></Button></DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader><DialogTitle>Complete Assignment</DialogTitle></DialogHeader>
-                                <div className="space-y-4">
-                                  <div><Label>Pieces Completed *</Label><Input type="number" value={completeForm.piecesCompleted} onChange={e => setCompleteForm({ ...completeForm, piecesCompleted: e.target.value })} /></div>
-                                  <div><Label>Waste Pieces</Label><Input type="number" value={completeForm.piecesWaste} onChange={e => setCompleteForm({ ...completeForm, piecesWaste: e.target.value })} /></div>
-                                  <div><Label>Waste Reason</Label><Input value={completeForm.wasteReason} onChange={e => setCompleteForm({ ...completeForm, wasteReason: e.target.value })} /></div>
-                                  <Button className="w-full" onClick={() => handleComplete(a.id)}>Mark Complete</Button>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-                            <Dialog open={transferDialog === a.id} onOpenChange={o => { setTransferDialog(o ? a.id : null); if (!o) setTransferForm({ newMasterId: "", quantityToTransfer: "" }); }}>
-                              <DialogTrigger asChild><Button variant="ghost" size="icon" title="Transfer"><ArrowRightLeft className="h-4 w-4 text-blue-600" /></Button></DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader><DialogTitle>Transfer to Another Master</DialogTitle></DialogHeader>
-                                <div className="space-y-4">
-                                  <div><Label>New Master *</Label>
-                                    <Select value={transferForm.newMasterId} onValueChange={v => setTransferForm({ ...transferForm, newMasterId: v })}>
-                                      <SelectTrigger><SelectValue placeholder="Select master" /></SelectTrigger>
-                                      <SelectContent>{masters.filter(m => m.id !== a.masterId).map(m => <SelectItem key={m.id} value={m.id.toString()}>{m.name}</SelectItem>)}</SelectContent>
-                                    </Select>
-                                  </div>
-                                  <div><Label>Quantity to Transfer * (max: {a.quantityGiven})</Label><Input type="number" max={a.quantityGiven} value={transferForm.quantityToTransfer} onChange={e => setTransferForm({ ...transferForm, quantityToTransfer: e.target.value })} /></div>
-                                  <Button className="w-full" onClick={() => handleTransfer(a.id)}>Transfer</Button>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-                            <Button variant="ghost" size="icon" onClick={() => apiDelete(`/stitching/assignments/${a.id}`).then(fetchJob)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                          </>
-                        )}
+            <div className="space-y-6">
+              {(() => {
+                const groups = new Map<number, { masterName: string; machineNo: string | null; items: Assignment[] }>();
+                for (const a of job.assignments) {
+                  const g = groups.get(a.masterId);
+                  if (g) g.items.push(a);
+                  else groups.set(a.masterId, { masterName: a.masterName, machineNo: a.machineNo, items: [a] });
+                }
+                return Array.from(groups.entries()).map(([masterId, g]) => {
+                  const mGiven = g.items.reduce((s, x) => s + x.quantityGiven, 0);
+                  const mDone = g.items.reduce((s, x) => s + (x.piecesCompleted || 0), 0);
+                  const mWaste = g.items.reduce((s, x) => s + (x.piecesWaste || 0), 0);
+                  const mAmount = g.items.reduce((s, x) => s + (x.totalAmount || 0), 0);
+                  const allDone = g.items.every((x) => x.status === "completed");
+                  return (
+                    <div key={masterId} className="border rounded-lg overflow-hidden">
+                      <div className="bg-muted/40 px-4 py-2.5 flex items-center justify-between border-b">
+                        <div className="flex items-center gap-3">
+                          <div className="font-semibold text-base">{g.masterName}</div>
+                          {g.machineNo && <Badge variant="outline" className="font-mono text-xs">M: {g.machineNo}</Badge>}
+                          <Badge variant={allDone ? "default" : "secondary"} className="text-xs">
+                            {g.items.length} task{g.items.length > 1 ? "s" : ""} · {allDone ? "all done" : `${g.items.filter(x => x.status === "completed").length}/${g.items.length} done`}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-4 text-xs font-mono">
+                          <span>Given: <strong>{mGiven}</strong></span>
+                          <span className="text-green-700">Done: <strong>{mDone}</strong></span>
+                          {mWaste > 0 && <span className="text-orange-600">Waste: <strong>{mWaste}</strong></span>}
+                          <span className="text-green-700">Rs.<strong>{mAmount.toLocaleString()}</strong></span>
+                        </div>
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                <TableRow className="bg-muted/50 font-bold">
-                  <TableCell colSpan={4}>Total</TableCell>
-                  <TableCell>{totalGiven}</TableCell>
-                  <TableCell>{totalDone}</TableCell>
-                  <TableCell className="text-orange-600">{totalWaste}</TableCell>
-                  <TableCell></TableCell>
-                  <TableCell className="font-mono text-green-700">Rs.{totalAmount.toLocaleString()}</TableCell>
-                  <TableCell colSpan={2}></TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Component</TableHead>
+                            <TableHead>Size</TableHead>
+                            <TableHead className="text-right">Given</TableHead>
+                            <TableHead className="text-right">Done</TableHead>
+                            <TableHead className="text-right">Waste</TableHead>
+                            <TableHead>Rate</TableHead>
+                            <TableHead className="text-right">Amount</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {g.items.map((a) => (
+                            <TableRow key={a.id}>
+                              <TableCell>{a.componentName}</TableCell>
+                              <TableCell><Badge variant="outline" className="font-mono text-xs">{a.size || "All"}</Badge></TableCell>
+                              <TableCell className="text-right font-mono">{a.quantityGiven}</TableCell>
+                              <TableCell className="text-right font-mono">{a.piecesCompleted || "-"}</TableCell>
+                              <TableCell className="text-right font-mono text-orange-600">{a.piecesWaste || "-"}</TableCell>
+                              <TableCell className="text-xs">{a.ratePerPiece ? `Rs.${a.ratePerPiece}/pc` : a.ratePerSuit ? `Rs.${a.ratePerSuit}/suit` : <span className="text-muted-foreground italic">bundled</span>}</TableCell>
+                              <TableCell className="text-right font-mono font-bold text-green-700">{a.totalAmount ? `Rs.${a.totalAmount.toLocaleString()}` : "-"}</TableCell>
+                              <TableCell><Badge variant={a.status === "completed" ? "default" : "secondary"} className="text-xs">{a.status.replace("_", " ")}</Badge></TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  {a.status !== "completed" && (
+                                    <>
+                                      <Dialog open={completeDialog === a.id} onOpenChange={o => { setCompleteDialog(o ? a.id : null); if (!o) setCompleteForm({ piecesCompleted: "", piecesWaste: "", wasteReason: "" }); }}>
+                                        <DialogTrigger asChild><Button variant="ghost" size="icon" title="Complete"><CheckCircle className="h-4 w-4 text-green-600" /></Button></DialogTrigger>
+                                        <DialogContent>
+                                          <DialogHeader><DialogTitle>Complete — {a.masterName} / {a.componentName} ({a.size || "All"})</DialogTitle></DialogHeader>
+                                          <div className="space-y-4">
+                                            <div className="bg-muted/50 rounded-lg p-3 text-sm">Given: <strong>{a.quantityGiven} pcs</strong></div>
+                                            <div><Label>Pieces Completed *</Label><Input type="number" value={completeForm.piecesCompleted} onChange={e => setCompleteForm({ ...completeForm, piecesCompleted: e.target.value })} /></div>
+                                            <div><Label>Waste Pieces</Label><Input type="number" value={completeForm.piecesWaste} onChange={e => setCompleteForm({ ...completeForm, piecesWaste: e.target.value })} /></div>
+                                            <div><Label>Waste Reason</Label><Input value={completeForm.wasteReason} onChange={e => setCompleteForm({ ...completeForm, wasteReason: e.target.value })} /></div>
+                                            <Button className="w-full" onClick={() => handleComplete(a.id)}>Mark Complete</Button>
+                                          </div>
+                                        </DialogContent>
+                                      </Dialog>
+                                      <Dialog open={transferDialog === a.id} onOpenChange={o => { setTransferDialog(o ? a.id : null); if (!o) setTransferForm({ newMasterId: "", quantityToTransfer: "" }); }}>
+                                        <DialogTrigger asChild><Button variant="ghost" size="icon" title="Transfer"><ArrowRightLeft className="h-4 w-4 text-blue-600" /></Button></DialogTrigger>
+                                        <DialogContent>
+                                          <DialogHeader><DialogTitle>Transfer to Another Master</DialogTitle></DialogHeader>
+                                          <div className="space-y-4">
+                                            <div><Label>New Master *</Label>
+                                              <Select value={transferForm.newMasterId} onValueChange={v => setTransferForm({ ...transferForm, newMasterId: v })}>
+                                                <SelectTrigger><SelectValue placeholder="Select master" /></SelectTrigger>
+                                                <SelectContent>{masters.filter(m => m.id !== a.masterId).map(m => <SelectItem key={m.id} value={m.id.toString()}>{m.name}</SelectItem>)}</SelectContent>
+                                              </Select>
+                                            </div>
+                                            <div><Label>Quantity to Transfer * (max: {a.quantityGiven})</Label><Input type="number" max={a.quantityGiven} value={transferForm.quantityToTransfer} onChange={e => setTransferForm({ ...transferForm, quantityToTransfer: e.target.value })} /></div>
+                                            <Button className="w-full" onClick={() => handleTransfer(a.id)}>Transfer</Button>
+                                          </div>
+                                        </DialogContent>
+                                      </Dialog>
+                                      <Button variant="ghost" size="icon" onClick={() => apiDelete(`/stitching/assignments/${a.id}`).then(fetchJob)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                    </>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  );
+                });
+              })()}
+              <div className="flex items-center justify-end gap-6 pt-3 border-t text-sm font-mono">
+                <span>Total Given: <strong>{totalGiven}</strong></span>
+                <span className="text-green-700">Done: <strong>{totalDone}</strong></span>
+                <span className="text-orange-600">Waste: <strong>{totalWaste}</strong></span>
+                <span className="text-green-700">Amount: <strong>Rs.{totalAmount.toLocaleString()}</strong></span>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>

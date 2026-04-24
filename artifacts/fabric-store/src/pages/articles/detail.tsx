@@ -52,8 +52,8 @@ export default function ArticleDetailPage() {
   const [loading, setLoading] = useState(true);
   const [compOpen, setCompOpen] = useState(false);
   const [accOpen, setAccOpen] = useState(false);
-  const [compForm, setCompForm] = useState({ componentName: "", fabricName: "", totalMetersReceived: 0 });
-  const [accForm, setAccForm] = useState({ accessoryName: "", quantity: 0, meters: 0, ratePerUnit: 0 });
+  const [compForm, setCompForm] = useState({ componentName: "", fabricName: "", totalMetersReceived: "" });
+  const [accForm, setAccForm] = useState({ accessoryName: "", quantity: "", meters: "", ratePerUnit: "" });
 
   const loadArticle = () => {
     if (!id) return;
@@ -71,8 +71,11 @@ export default function ArticleDetailPage() {
       return;
     }
     try {
-      await apiPost(`/articles/${id}/components`, compForm);
-      setCompForm({ componentName: "", fabricName: "", totalMetersReceived: 0 });
+      await apiPost(`/articles/${id}/components`, {
+        ...compForm,
+        totalMetersReceived: parseFloat(compForm.totalMetersReceived) || 0,
+      });
+      setCompForm({ componentName: "", fabricName: "", totalMetersReceived: "" });
       setCompOpen(false);
       toast({ title: "Component added" });
       loadArticle();
@@ -100,8 +103,13 @@ export default function ArticleDetailPage() {
       return;
     }
     try {
-      await apiPost(`/articles/${id}/accessories`, accForm);
-      setAccForm({ accessoryName: "", quantity: 0, meters: 0, ratePerUnit: 0 });
+      await apiPost(`/articles/${id}/accessories`, {
+        ...accForm,
+        quantity: parseFloat(accForm.quantity) || 0,
+        meters: parseFloat(accForm.meters) || 0,
+        ratePerUnit: parseFloat(accForm.ratePerUnit) || 0,
+      });
+      setAccForm({ accessoryName: "", quantity: "", meters: "", ratePerUnit: "" });
       setAccOpen(false);
       toast({ title: "Accessory added" });
       loadArticle();
@@ -199,7 +207,7 @@ export default function ArticleDetailPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Total Meters Received</Label>
-                  <Input type="number" step="0.1" value={compForm.totalMetersReceived} onChange={e => setCompForm(f => ({ ...f, totalMetersReceived: parseFloat(e.target.value) || 0 }))} />
+                  <Input type="number" step="0.1" value={compForm.totalMetersReceived} onChange={e => setCompForm(f => ({ ...f, totalMetersReceived: e.target.value }))} />
                 </div>
                 <Button onClick={addComponent} className="w-full">Add Component</Button>
               </div>
@@ -255,15 +263,15 @@ export default function ArticleDetailPage() {
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-2">
                     <Label>Quantity</Label>
-                    <Input type="number" step="0.1" value={accForm.quantity} onChange={e => setAccForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))} />
+                    <Input type="number" step="0.1" value={accForm.quantity} onChange={e => setAccForm(f => ({ ...f, quantity: e.target.value }))} />
                   </div>
                   <div className="space-y-2">
                     <Label>Meters</Label>
-                    <Input type="number" step="0.1" value={accForm.meters} onChange={e => setAccForm(f => ({ ...f, meters: parseFloat(e.target.value) || 0 }))} />
+                    <Input type="number" step="0.1" value={accForm.meters} onChange={e => setAccForm(f => ({ ...f, meters: e.target.value }))} />
                   </div>
                   <div className="space-y-2">
                     <Label>Rate/Unit</Label>
-                    <Input type="number" step="0.1" value={accForm.ratePerUnit} onChange={e => setAccForm(f => ({ ...f, ratePerUnit: parseFloat(e.target.value) || 0 }))} />
+                    <Input type="number" step="0.1" value={accForm.ratePerUnit} onChange={e => setAccForm(f => ({ ...f, ratePerUnit: e.target.value }))} />
                   </div>
                 </div>
                 <Button onClick={addAccessory} className="w-full">Add Accessory</Button>
