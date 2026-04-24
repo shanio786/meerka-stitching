@@ -323,12 +323,32 @@ export default function CuttingDetail() {
       if (!masterGroups[a.masterName]) masterGroups[a.masterName] = [];
       masterGroups[a.masterName].push(a);
     }
-    const sizesAggregated: Record<string, number> = {};
+    const componentSizes: Record<string, Record<string, number>> = {};
     for (const a of job.assignments) {
+      if (!componentSizes[a.componentName]) componentSizes[a.componentName] = {};
       for (const s of a.sizes || []) {
-        sizesAggregated[s.size] = (sizesAggregated[s.size] || 0) + s.quantity;
+        componentSizes[a.componentName][s.size] = (componentSizes[a.componentName][s.size] || 0) + s.quantity;
       }
     }
+    const allSizesSet = new Set<string>();
+    Object.values(componentSizes).forEach((cs) => Object.keys(cs).forEach((sz) => allSizesSet.add(sz)));
+    const componentNames = Object.keys(componentSizes);
+    const sizeOrder = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
+    const allSizes = Array.from(allSizesSet).sort((a, b) => {
+      const ai = sizeOrder.indexOf(a); const bi = sizeOrder.indexOf(b);
+      if (ai === -1 && bi === -1) return a.localeCompare(b);
+      if (ai === -1) return 1; if (bi === -1) return -1;
+      return ai - bi;
+    });
+    const suitsPerSize: Record<string, number> = {};
+    const piecesPerSize: Record<string, number> = {};
+    for (const size of allSizes) {
+      suitsPerSize[size] = componentNames.length > 0
+        ? Math.min(...componentNames.map((c) => componentSizes[c][size] || 0))
+        : 0;
+      piecesPerSize[size] = componentNames.reduce((s, c) => s + (componentSizes[c][size] || 0), 0);
+    }
+    const hasMultipleComponents = componentNames.length > 1;
     const html = `<!DOCTYPE html><html><head><title>Cutting Job Card CUT-${String(job.id).padStart(4, "0")}</title>
 <style>
   * { box-sizing: border-box; }
@@ -404,12 +424,32 @@ ${job.notes ? `<div style="margin-bottom:12px;padding:8px;background:#fffbe5;bor
   </tbody>
 </table>
 
-${Object.keys(sizesAggregated).length > 0 ? `
-<h2>Size Breakdown (Total Across All Components)</h2>
+${allSizes.length > 0 ? `
+<h2>Size Breakdown — Suits Made${hasMultipleComponents ? " (MIN across components)" : ""}</h2>
 <table>
-  <thead><tr>${Object.keys(sizesAggregated).map((s) => `<th class="center">${s}</th>`).join("")}<th class="center">TOTAL</th></tr></thead>
-  <tbody><tr>${Object.values(sizesAggregated).map((q) => `<td class="center">${q}</td>`).join("")}<td class="center"><strong>${Object.values(sizesAggregated).reduce((a, b) => a + b, 0)}</strong></td></tr></tbody>
-</table>` : ""}
+  <thead>
+    <tr>
+      <th>Type</th>
+      ${allSizes.map((s) => `<th class="center">${s}</th>`).join("")}
+      <th class="center">TOTAL</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${hasMultipleComponents ? componentNames.map((c) => `
+      <tr>
+        <td><strong>${c}</strong></td>
+        ${allSizes.map((s) => `<td class="center">${componentSizes[c][s] || "-"}</td>`).join("")}
+        <td class="center"><strong>${Object.values(componentSizes[c]).reduce((a, b) => a + b, 0)}</strong></td>
+      </tr>
+    `).join("") : ""}
+    <tr style="background:#e8f5e9;font-weight:bold">
+      <td>${hasMultipleComponents ? "✓ COMPLETE SUITS" : "Pieces"}</td>
+      ${allSizes.map((s) => `<td class="center">${hasMultipleComponents ? suitsPerSize[s] : piecesPerSize[s]}</td>`).join("")}
+      <td class="center">${hasMultipleComponents ? Object.values(suitsPerSize).reduce((a, b) => a + b, 0) : Object.values(piecesPerSize).reduce((a, b) => a + b, 0)}</td>
+    </tr>
+  </tbody>
+</table>
+${hasMultipleComponents ? `<div style="font-size:10px;color:#666;margin-top:4px">Each suit = 1 of every component (${componentNames.join(" + ")}). Suits per size = MIN of all component counts for that size.</div>` : ""}` : ""}
 
 <div class="signatures">
   <div class="sig-box">Cutting Master Signature</div>
